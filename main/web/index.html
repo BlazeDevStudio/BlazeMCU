@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101820">
+<title>BlazeMCU | ESP Starter</title>
+<style>
+:root{color-scheme:dark;--bg:#101820;--panel:#1b2630;--line:#40505b;--ink:#f4f6f7;--muted:#bbc9cf;--accent:#ffb357}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,sans-serif}
+header{border-bottom:1px solid var(--line);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+strong{letter-spacing:.02em}header small{color:var(--muted)}
+main{max-width:960px;margin:auto;padding:18px}
+nav{display:flex;overflow-x:auto;gap:6px;padding-bottom:10px;margin-bottom:14px}
+button,input,select{font:inherit}button{border:1px solid var(--line);background:#273744;color:var(--ink);border-radius:8px;padding:10px 13px;cursor:pointer}
+button[aria-current="page"],button.primary{background:var(--accent);color:#1e1711;border-color:var(--accent);font-weight:650}
+button:disabled{opacity:.5;cursor:not-allowed}
+section{display:none}section.active{display:block}
+article{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:14px}
+h1{font-size:1.5rem;margin:0}h2{font-size:1.1rem;margin:0 0 10px}
+p{margin:8px 0;color:var(--muted)}
+label{display:block;margin:9px 0 5px}input,select{width:100%;max-width:520px;border:1px solid var(--line);padding:10px;background:#0e151b;border-radius:6px;color:var(--ink)}
+input[type="checkbox"]{width:auto;accent-color:var(--accent)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.notice{border-left:3px solid var(--accent);padding:9px 12px;background:#302b25}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.88rem;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{text-align:left;padding:7px;border-bottom:1px solid var(--line);vertical-align:top}
+.scroll{overflow:auto;max-height:490px}
+.bad{color:#ffc4a2}.good{color:#99e5c5}code{color:#ffcd96}
+@media(max-width:580px){main{padding:10px}article{padding:13px}header{padding:12px}th,td{padding:5px}}
+</style>
+</head>
+<body>
+<header><div><h1>BlazeMCU</h1><small>ESP Starter / Hardware Laboratory</small></div><small>0.1.0 PREVIEW</small></header>
+<main>
+<nav aria-label="Main sections">
+<button data-tab="dashboard" aria-current="page">Dashboard</button>
+<button data-tab="loader">Firmware</button>
+<button data-tab="gpio">GPIO Lab</button>
+<button data-tab="displays">Displays</button>
+<button data-tab="serial">Serial</button>
+<button data-tab="pins">Pins</button>
+<button data-tab="help">Help</button>
+</nav>
+<section id="dashboard" class="active">
+<article><h2>Device status</h2><pre id="device">Connecting…</pre></article>
+<article><h2>Administrative access</h2>
+<p>Read the individual admin token from the board's serial console. It is held only in this browser page's memory, not saved to storage.</p>
+<label for="token">Admin token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="32-character device token">
+<div class="actions"><button id="tokenApply">Use token</button><button id="tokenClear">Clear token</button></div>
+<p id="authstate">Token not set</p></article>
+</section>
+<section id="loader">
+<article><h2>Firmware loader</h2><p class="notice">FLASH and PREBOOT are disabled in this preview. No uploaded firmware can run or overwrite the factory image.</p>
+<p>Only compiled ESP32 application images (.bin) may eventually be eligible. Arduino .ino source files are not firmware images.</p>
+<label for="firmwareFile">Compiled application binary (.bin)</label><input type="file" id="firmwareFile" accept=".bin,application/octet-stream" disabled>
+<div class="actions"><button disabled>PREBOOT · unavailable</button><button disabled>FLASH · unavailable</button></div>
+<p>See Help for Arduino IDE, Arduino CLI, PlatformIO and ESP-IDF export instructions.</p></article>
+</section>
+<section id="gpio">
+<article><h2>GPIO experiment</h2><p>One pin at a time. All operations expire after 20 seconds and are discarded on reset. Do not exceed 3.3 V GPIO limits.</p>
+<div class="grid"><div>
+<label for="pin">GPIO</label><select id="pin"></select>
+<label for="mode">Requested mode</label><select id="mode"><option value="input">Input monitor</option><option value="output">Output control</option></select>
+<label for="level">Output state</label><select id="level"><option value="0">LOW</option><option value="1">HIGH</option></select>
+<label><input type="checkbox" id="pullup"> Enable internal pull-up for input (where supported)</label>
+</div><div><h2>Selected pin</h2><p id="pinInfo">Loading pin capabilities…</p>
+<label><input type="checkbox" id="ack"> I understand the warning. Proceed anyway where technically supported.</label></div></div>
+<div class="actions"><button class="primary" id="start">Start test</button><button id="stop">STOP / release pin</button></div>
+<p id="gpioMessage" role="status">Idle</p><pre id="gpioStatus">-</pre>
+</article>
+<article><h2>Next-stage functions</h2><p>PWM, pulse generation, reaction mapping, ADC and debounce settings are not connected in this build and are not offered as active controls.</p></article>
+</section>
+<section id="displays"><article><h2>Display laboratory</h2><p class="notice">Unimplemented. I²C scanning, SPI drivers, slideshow and frame-rate tests have no active backend yet.</p>
+<p>Planned: SSD1306, SH1106, HD44780 I²C backpack, ST7735, ST7789 and ILI9341. I²C addresses alone cannot identify a display controller; SPI discovery is manual.</p></article></section>
+<section id="serial"><article><h2>Serial monitor</h2><p class="notice">Unimplemented. UART RX/TX and log streaming are not active in this firmware.</p>
+<p>ESP GPIO is generally 3.3 V logic. Never connect RS-232 voltage levels directly.</p></article></section>
+<section id="pins"><article><h2>Complete pin reference</h2><p>Every GPIO number 0–39 is visible, including flash-reserved, input-only and module-unavailable numbers. Capability data describes a generic ESP32-WROOM-32 DevKit reference board, not every manufacturer's PCB.</p>
+<div class="scroll"><table><thead><tr><th>GPIO</th><th>Category</th><th>Digital</th><th>Reference caution</th></tr></thead><tbody id="pinRows"></tbody></table></div></article></section>
+<section id="help"><article><h2>How to prepare a .bin</h2>
+<p><strong>Arduino IDE:</strong> Select the exact ESP32 board, flash size and partition scheme. Use Sketch → Export Compiled Binary. Do not upload .ino directly.</p>
+<p><strong>Arduino CLI:</strong> Install esp32 core, select the FQBN, then run <code>arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries path/to/sketch</code>.</p>
+<p><strong>PlatformIO:</strong> Build a matching <code>platform = espressif32</code> environment. The application image appears under <code>.pio/build/&lt;env&gt;/firmware.bin</code>.</p>
+<p><strong>ESP-IDF:</strong> Run <code>idf.py set-target esp32</code>, then <code>idf.py build</code>. Use the application .bin for compatible OTA slots; a merged full-flash image is not interchangeable with an OTA application image.</p>
+<p>4 MB flash and partition compatibility are mandatory for this prototype. A factory partition does not automatically make a boot failure recoverable without a serial flashing path.</p>
+<p>For faults, use the ESP32 ROM download mode (BOOT/GPIO0 held low on reset) and esptool to reflash an authorized recovery image. Verify your specific board's buttons and wiring first.</p></article></section>
+</main>
+<script>
+'use strict';
+let token = '';
+let pins = [];
+const el = id => document.getElementById(id);
+const asText = (id, value) => { el(id).textContent = value; };
+async function request(path, method, body) {
+  const opts = {method: method || 'GET', cache: 'no-store', headers: {}};
+  if (method === 'POST') {
+    opts.headers['X-Blaze-Token'] = token;
+    if (body !== undefined) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+  }
+  const r = await fetch(path, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
+  return data;
+}
+function activePin() { return pins.find(x => x.number === Number(el('pin').value)); }
+function showPin() {
+  const p = activePin();
+  if (!p) return;
+  asText('pinInfo', 'GPIO' + p.number + ' · ' + p.category + '\n' +
+    'Input: ' + p.input + ' · Output: ' + p.output + ' · ADC: ' + p.adc + ' · PWM capability: ' + p.pwm +
+    '\n' + p.warning);
+  el('ack').checked = false;
+}
+function fillPins() {
+  const select = el('pin'), rows = el('pinRows');
+  pins.forEach(p => {
+    const o = document.createElement('option');
+    o.value = String(p.number);
+    o.textContent = 'GPIO' + p.number + ' · ' + p.category;
+    select.appendChild(o);
+    const tr = document.createElement('tr');
+    [p.number, p.category, (p.input ? 'IN ' : '') + (p.output ? 'OUT' : ''), p.warning].forEach(value => {
+      const td = document.createElement('td'); td.textContent = String(value); tr.appendChild(td);
+    });
+    rows.appendChild(tr);
+  });
+  select.value = '32'; showPin();
+}
+async function updateGpio() {
+  try {
+    const s = await request('/api/gpio');
+    asText('gpioStatus', JSON.stringify(s, null, 2));
+  } catch (err) { asText('gpioStatus', err.message); }
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('[data-tab]').forEach(x => x.removeAttribute('aria-current'));
+  b.setAttribute('aria-current', 'page');
+  document.querySelectorAll('section').forEach(x => x.classList.toggle('active', x.id === b.dataset.tab));
+}));
+el('pin').addEventListener('change', showPin);
+el('tokenApply').addEventListener('click', () => {
+  token = el('token').value;
+  el('token').value = '';
+  asText('authstate', token ? 'Admin token loaded for this page only' : 'Token not set');
+});
+el('tokenClear').addEventListener('click', () => { token = ''; asText('authstate', 'Token cleared'); });
+el('start').addEventListener('click', async () => {
+  try {
+    const data = await request('/api/gpio','POST',{
+      pin:Number(el('pin').value),mode:el('mode').value,
+      level:Number(el('level').value),pullup:el('pullup').checked,ack:el('ack').checked
+    });
+    asText('gpioMessage', data.message);
+  } catch (err) { asText('gpioMessage', err.message); }
+  await updateGpio();
+});
+el('stop').addEventListener('click', async () => {
+  try { await request('/api/gpio/stop','POST'); asText('gpioMessage','Released'); }
+  catch (err) { asText('gpioMessage', err.message); }
+  await updateGpio();
+});
+async function startup() {
+  try { asText('device', JSON.stringify(await request('/api/status'),null,2)); }
+  catch (err) { asText('device', err.message); }
+  try { pins = (await request('/api/pins')).pins; fillPins(); }
+  catch (err) { asText('pinInfo', err.message); }
+  await updateGpio();
+}
+startup();
+setInterval(updateGpio, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+idf_component_register(
+  SRCS "app_main.c" "board_caps.c" "lab_policy.c" "lab.c" "security.c" "api.c"
+  INCLUDE_DIRS "."
+  EMBED_TXTFILES "web/index.html"
+  REQUIRES esp_wifi esp_event esp_netif nvs_flash esp_http_server json driver esp_timer spi_flash
+)
