@@ -3,6 +3,8 @@
 #include "lab.h"
 #include "i2c_scan.h"
 #include "oled_diag.h"
+#include "uart_monitor.h"
+#include "../common/uart_limits.h"
 #include "../common/oled_pattern.h"
 #include "../common/pwm_limits.h"
 #include "security.h"
@@ -90,7 +92,7 @@ static esp_err_t status_get(httpd_req_t *req) {
   esp_flash_get_size(NULL, &flash);
   cJSON *obj = cJSON_CreateObject();
   cJSON_AddStringToObject(obj, "product", "BlazeMCU ESP Starter");
-  cJSON_AddStringToObject(obj, "version", "0.5.0-preview");
+  cJSON_AddStringToObject(obj, "version", "0.6.0-preview");
   cJSON_AddStringToObject(obj, "board", blaze_board_id());
   cJSON_AddNumberToObject(obj, "cores", info.cores);
   cJSON_AddNumberToObject(obj, "heap_free", esp_get_free_heap_size());
@@ -314,6 +316,78 @@ static esp_err_t oled_post(httpd_req_t *req) {
   return json_send(req, out, NULL);
 }
 
+static esp_err_t uart_start_post(httpd_req_t *req) {
+  if (!authorized(req)) return require_token(req);
+  cJSON *obj = NULL;
+  if (receive_small_json(req,&obj) != ESP_OK)
+    return error_response(req, "400 Bad Request", "Invalid bounded UART JSON");
+  cJSON *pin = cJSON_GetObjectItemCaseSensitive(obj,"pin");
+  cJSON *baud = cJSON_GetObjectItemCaseSensitive(obj,"baud");
+  cJSON *ack = cJSON_GetObjectItemCaseSensitive(obj,"ack");
+  if (!cJSON_IsNumber(pin) || !cJSON_IsNumber(baud) ||
+      pin->valuedouble != (double)pin->valueint ||
+      baud->valuedouble != (double)baud->valueint ||
+      (ack && !cJSON_IsBool(ack))) {
+    cJSON_Delete(obj);
+    return error_response(req,"400 Bad Request","UART RX pin and baud must be integers");
+  }
+  const int rx = pin->valueint, b = baud->valueint;
+  const bool acknowledged = cJSON_IsTrue(ack);
+  cJSON_Delete(obj);
+  if (!blaze_uart_baud_supported(b))
+    return error_response(req,"422 Unprocessable Entity","UART supports 1200/2400/4800/9600 baud (8N1) only");
+  blaze_policy_t permission = blaze_uart_decide(rx,acknowledged);
+  if (permission == BLAZE_ACK_REQUIRED)
+    return error_response(req,"409 Conflict","Acknowledge boot-sensitive UART RX pin");
+  if (permission != BLAZE_ALLOW)
+    return error_response(req,"422 Unprocessable Entity","Reserved, flash or unavailable RX pin denied");
+  esp_err_t err = blaze_uart_start(rx,b,acknowledged);
+  if (err == ESP_ERR_INVALID_STATE)
+    return error_response(req,"409 Conflict","STOP current UART/GPIO lab before starting another");
+  if (err != ESP_OK)
+    return error_response(req,"503 Service Unavailable","UART RX driver could not start");
+  cJSON *out = cJSON_CreateObject();
+  if (!out) return ESP_ERR_NO_MEM;
+  cJSON_AddStringToObject(out,"status","running");
+  cJSON_AddStringToObject(out,"message","RX-only UART listening for at most 20 seconds");
+  return json_send(req,out,NULL);
+}
+static esp_err_t uart_get(httpd_req_t *req) {
+  if (!authorized(req)) return require_token(req);
+  uint8_t data[BLAZE_UART_MAX_READ] = {0};
+  const int n = blaze_uart_read(data,sizeof(data));
+  char hex[2 * BLAZE_UART_MAX_READ + 1];
+  char preview[BLAZE_UART_MAX_READ + 1];
+  const char alphabet[] = "0123456789ABCDEF";
+  for (int i=0; i<n; ++i) {
+    hex[i*2] = alphabet[data[i] >> 4];
+    hex[i*2+1] = alphabet[data[i] & 15];
+    preview[i] = (data[i] >= 32 && data[i] <= 126) ? (char)data[i] :
+                 (data[i] == 10 ? '\n' : '.');
+  }
+  hex[2*n] = 0;
+  preview[n] = 0;
+  cJSON *out = cJSON_CreateObject();
+  if (!out) return ESP_ERR_NO_MEM;
+  const int rx = blaze_uart_rx_pin();
+  cJSON_AddStringToObject(out,"status",rx < 0 ? "idle" : "running");
+  cJSON_AddNumberToObject(out,"pin",rx);
+  cJSON_AddNumberToObject(out,"baud",blaze_uart_baud());
+  cJSON_AddNumberToObject(out,"expires_in_ms",blaze_uart_expires_ms());
+  cJSON_AddNumberToObject(out,"bytes",n);
+  cJSON_AddStringToObject(out,"hex",hex);
+  cJSON_AddStringToObject(out,"text",preview);
+  return json_send(req,out,NULL);
+}
+static esp_err_t uart_stop_post(httpd_req_t *req) {
+  if (!authorized(req)) return require_token(req);
+  blaze_uart_stop();
+  cJSON *out = cJSON_CreateObject();
+  if (!out) return ESP_ERR_NO_MEM;
+  cJSON_AddStringToObject(out,"status","idle");
+  return json_send(req,out,NULL);
+}
+
 static esp_err_t gpio_stop(httpd_req_t *req) {
   if (!authorized(req)) return require_token(req);
   if (blaze_lab_stop() != ESP_OK) return error_response(req, "503 Service Unavailable", "Failed to stop test");
@@ -332,7 +406,7 @@ static esp_err_t register_route(const char *uri, httpd_method_t method, esp_err_
 }
 esp_err_t blaze_api_start(void) {
   httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-  cfg.max_uri_handlers = 14;
+  cfg.max_uri_handlers = 17;
   cfg.stack_size = 6144;
   esp_err_t e = httpd_start(&server, &cfg);
   if (e != ESP_OK) return e;
@@ -347,6 +421,9 @@ esp_err_t blaze_api_start(void) {
       (e = register_route("/api/gpio/stop", HTTP_POST, gpio_stop)) != ESP_OK ||
       (e = register_route("/api/i2c/scan", HTTP_POST, i2c_scan_post)) != ESP_OK ||
       (e = register_route("/api/oled/test", HTTP_POST, oled_post)) != ESP_OK ||
+      (e = register_route("/api/uart", HTTP_GET, uart_get)) != ESP_OK ||
+      (e = register_route("/api/uart/start", HTTP_POST, uart_start_post)) != ESP_OK ||
+      (e = register_route("/api/uart/stop", HTTP_POST, uart_stop_post)) != ESP_OK ||
       (e = register_route("/api/firmware/flash", HTTP_POST, loader_disabled)) != ESP_OK ||
       (e = register_route("/api/firmware/preboot", HTTP_POST, loader_disabled)) != ESP_OK) {
     httpd_stop(server);

@@ -47,3 +47,7 @@ Address-only bus scanning is available on both ESP32 and ESP8266, but **not hard
 ## Limited I²C OLED output
 
 The 0.5 preview offers opt-in SSD1306/SH1106 128×64 checker, border and blank patterns only. No display model is auto-detected. It rewrites target display RAM and may persist visually until blank/power off; laboratory settings are never stored. The driver refuses scans while a GPIO test is active. Physical output and recovery remain unverified.
+
+## RX-only UART (0.6 preview)
+
+No serial transmit API exists. UART0 console pins GPIO1/3 and flash pins are denied; ESP8266 GPIO16 cannot run software RX. External 3.3 V TTL signals only, with shared ground. Never connect RS-232 or 5 V TTL without an approved converter. Sessions expire after 20 seconds and cannot overlap GPIO/I²C/OLED activity. Physical timing and input reliability are unverified.

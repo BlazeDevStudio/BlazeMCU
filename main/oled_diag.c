@@ -1,6 +1,7 @@
 #include "oled_diag.h"
 #include "i2c_policy.h"
 #include "lab.h"
+#include "uart_monitor.h"
 #include "../common/oled_pattern.h"
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
@@ -14,7 +15,7 @@ esp_err_t blaze_oled_draw(int sda, int scl, int address, int controller,
   if (!blaze_oled_allowed(address,controller,pattern)) return ESP_ERR_INVALID_ARG;
   if (blaze_i2c_decide(sda,scl,acknowledged) != BLAZE_ALLOW)
     return ESP_ERR_NOT_SUPPORTED;
-  if (blaze_lab_status().pin >= 0) return ESP_ERR_INVALID_STATE;
+  if (blaze_lab_status().pin >= 0 || blaze_uart_active()) return ESP_ERR_INVALID_STATE;
 
   i2c_master_bus_config_t cfg = {
     .clk_source = I2C_CLK_SRC_DEFAULT,

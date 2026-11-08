@@ -1,5 +1,6 @@
 #include "i2c_scan.h"
 #include "lab.h"
+#include "uart_monitor.h"
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
@@ -15,7 +16,7 @@ esp_err_t blaze_i2c_scan(int sda, int scl, bool ack,
   /* The HTTP server handles GPIO mutations serially; refuse conflicting
    * laboratory operation rather than implicitly stopping any active test.
    */
-  if (blaze_lab_status().pin >= 0) return ESP_ERR_INVALID_STATE;
+  if (blaze_lab_status().pin >= 0 || blaze_uart_active()) return ESP_ERR_INVALID_STATE;
   i2c_master_bus_config_t config = {
     .clk_source = I2C_CLK_SRC_DEFAULT,
     .i2c_port = I2C_NUM_0,

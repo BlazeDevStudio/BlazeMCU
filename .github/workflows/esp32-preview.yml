@@ -32,6 +32,8 @@ jobs:
           /tmp/blaze-i2c-policy
           cc -std=c11 -Wall -Wextra -Werror tests/oled_pattern_test.c -o /tmp/blaze-oled-pattern
           /tmp/blaze-oled-pattern
+          cc -std=c11 -Wall -Wextra -Werror -Imain main/board_caps.c main/lab_policy.c main/uart_policy.c tests/uart_policy_test.c -o /tmp/blaze-uart-policy
+          /tmp/blaze-uart-policy
       - name: Validate partition table, web assets, routes and UI contracts
         run: |
           python3 -m unittest discover -s tests -v

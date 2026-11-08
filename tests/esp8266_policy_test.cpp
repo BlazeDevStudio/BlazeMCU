@@ -35,5 +35,10 @@ int main() {
   assert(blaze8266I2cPolicy(0,5,true) == BLAZE8266_ALLOW);
   assert(blaze8266I2cPolicy(1,5,false) == BLAZE8266_ACK_REQUIRED);
   assert(blaze8266I2cPolicy(1,5,true) == BLAZE8266_ALLOW);
-  std::puts("PASS: ESP8266 GPIO + I2C policy, straps, flash, GPIO16 and A0 denied");
+  assert(blaze8266UartPolicy(12,false)==BLAZE8266_ALLOW);
+  assert(blaze8266UartPolicy(0,false)==BLAZE8266_ACK_REQUIRED);
+  assert(blaze8266UartPolicy(0,true)==BLAZE8266_ALLOW);
+  for (int p : {1,3,6,7,8,9,10,11,16,17})
+    assert(blaze8266UartPolicy(p,true)==BLAZE8266_DENY);
+  std::puts("PASS: ESP8266 GPIO/I2C/UART fail-closed policy");
 }

@@ -146,3 +146,18 @@ footer { display:flex; justify-content:space-between; gap:12px; color:#77858e; f
 .address-tag { font-size:13px; font-weight:750; font-variant-numeric:tabular-nums;
   background:#edf3f0; color:#1f624a; border:1px solid #bed5c8;
   padding:7px 10px; border-radius:5px; }
+
+.serial-output {
+  overflow:auto;
+  white-space:pre-wrap;
+  word-break:break-word;
+  max-height:210px;
+  min-height:95px;
+  background:#1f2c34;
+  color:#eef1f1;
+  border-radius:6px;
+  font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;
+  padding:13px;
+  margin:4px 0 16px;
+}
+.serial-hex { color:#d1e6e0; }

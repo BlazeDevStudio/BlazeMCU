@@ -1,5 +1,6 @@
 #include "api.h"
 #include "lab.h"
+#include "uart_monitor.h"
 #include "security.h"
 #include "esp_check.h"
 #include "esp_event.h"
@@ -38,8 +39,9 @@ void app_main(void) {
   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
   ESP_ERROR_CHECK(esp_wifi_start());
+  ESP_ERROR_CHECK(blaze_uart_init());
   ESP_ERROR_CHECK(blaze_lab_init());
   ESP_ERROR_CHECK(blaze_api_start());
   ESP_LOGI(TAG, "AP %s ready; open http://192.168.4.1", (char *)ap.ap.ssid);
-  ESP_LOGW(TAG, "PREVIEW: no firmware upload/FLASH/PREBOOT, PWM, display or UART yet");
+  ESP_LOGW(TAG, "PREVIEW: no firmware upload, FLASH, PREBOOT; all hardware labs remain unverified");
 }

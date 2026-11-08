@@ -16,7 +16,7 @@
         <div class="mark" aria-hidden="true">B<span>/</span>M</div>
         <div><div class="product">BlazeMCU</div><div class="subtitle">ESP starter · Hardware laboratory</div></div>
       </div>
-      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.5.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
+      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.6.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
     </div>
   </header>
   <main class="shell">
@@ -175,9 +175,24 @@
     </section>
 
     <section id="serial" role="tabpanel" aria-labelledby="tab-serial" hidden>
-      <article class="panel narrow"><div class="panel-head"><h2>Serial diagnostics</h2><span class="state">Not implemented</span></div>
-        <p>Browser UART RX/TX, timestamped messages and sensor logs are not connected to a working backend.</p>
-        <div class="safety-strip">ESP GPIO uses 3.3 V logic. Never connect RS-232 voltage-level signals directly to an ESP pin.</div>
+      <article class="panel narrow">
+        <div class="panel-head"><h2>UART receive monitor</h2><span class="state">Receive only · 20 seconds</span></div>
+        <p>Monitor external 3.3 V TTL serial at 1200–9600 baud, 8N1. TX is deliberately unavailable; no bytes are transmitted or stored on the device. Monitoring ends automatically after 20 seconds.</p>
+        <div class="field-row">
+          <div class="field"><label for="uartPin">External RX input GPIO</label><select id="uartPin"><option>Loading pins…</option></select></div>
+          <div class="field"><label for="uartBaud">Baud rate · 8N1</label>
+            <select id="uartBaud"><option value="9600">9600</option><option value="4800">4800</option><option value="2400">2400</option><option value="1200">1200</option></select></div>
+        </div>
+        <div class="pin-detail"><p id="uartWarning">The board's UART0 console GPIO1/3 cannot be selected for receiving. Connect ground and verified 3.3 V TTL signals only.</p></div>
+        <label class="acknowledge"><input id="uartAck" type="checkbox"><span>I understand the selected GPIO's electrical and boot restrictions. Acknowledgment does not permit boot-console or flash pins.</span></label>
+        <div class="actions"><button type="button" class="primary" id="uartStart">Begin RX session</button><button type="button" class="danger" id="uartStop">STOP RX</button><button type="button" class="quiet" id="uartClear">Clear log</button></div>
+        <p class="feedback" id="uartMessage" role="status">Idle · Verify admin access before starting an RX-only session.</p>
+        <div class="metric-grid"><div><span>Monitor state</span><strong id="uartState">Idle</strong></div><div><span>Remaining</span><strong id="uartRemaining">—</strong></div></div>
+        <label for="uartText">Received ASCII (binary bytes replaced by dots)</label>
+        <pre class="serial-output" id="uartText" aria-live="off">No captured data.</pre>
+        <label for="uartHex">Raw RX hexadecimal</label>
+        <pre class="serial-output serial-hex" id="uartHex" aria-live="off">—</pre>
+        <div class="safety-strip">3.3 V TTL only. Do not connect RS-232 or 5 V serial directly. The console pins, GPIO16 on ESP8266 and flash-connected pins are not monitored. The capture is limited and may miss bytes under Wi-Fi load.</div>
       </article>
     </section>
 
@@ -192,7 +207,7 @@
         <p>Never treat a matching filename, I²C address, or GPIO capability as a guarantee of hardware compatibility. Consult the board manufacturer's pinout before connecting loads.</p>
       </article>
     </section>
-    <footer>BlazeDevStudio · Offline device tools <span>Build 0.5.0-preview · No cloud services required</span></footer>
+    <footer>BlazeDevStudio · Offline device tools <span>Build 0.6.0-preview · No cloud services required</span></footer>
   </main>
 </body>
 </html>

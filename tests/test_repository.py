@@ -157,6 +157,31 @@ class RepoContractTests(unittest.TestCase):
         self.assertNotIn("nvs_set_", cdriver)
         self.assertNotIn("esp_ota_write(", cdriver)
 
+    def test_uart_receive_only_and_bounded(self):
+        html = (ROOT / "main/web/index.html").read_text()
+        js = (ROOT / "main/web/app.js").read_text()
+        esp32 = (ROOT / "main/api.c").read_text()
+        driver = (ROOT / "main/uart_monitor.c").read_text()
+        esp8266 = (ROOT / "esp8266/src/main.cpp").read_text()
+        model = (ROOT / "common/uart_limits.h").read_text()
+        for id_ in ("uartPin","uartBaud","uartStart","uartStop","uartText","uartHex","uartAck"):
+            self.assertIn('id="' + id_ + '"', html)
+        self.assertIn("await request('/api/uart/start','POST'", js)
+        self.assertIn('"/api/uart/start", HTTP_POST, uart_start_post', esp32)
+        self.assertIn('"/api/uart", HTTP_GET, uart_get', esp32)
+        self.assertIn('"/api/uart/start",HTTP_POST,uartStartPost', esp8266)
+        self.assertIn('"/api/uart",HTTP_GET,uartGet', esp8266)
+        self.assertIn('BLAZE_UART_MAX_READ 128', model)
+        self.assertIn('uart_driver_install(UART_NUM_2',driver)
+        self.assertIn('uart_read_bytes(UART_NUM_2',driver)
+        self.assertIn('uart_driver_delete(UART_NUM_2',driver)
+        self.assertIn('uart_watchdog',driver)
+        self.assertNotIn('uart_write_bytes(',driver)
+        self.assertNotIn('uartReader.write(',esp8266)
+        self.assertIn('blaze8266UartPolicy',(ROOT/"esp8266/include/blaze_caps.h").read_text())
+        self.assertIn('activePin >= 0 || uartPin >= 0',esp8266)
+        self.assertIn('blaze_uart_active()', (ROOT/"main/lab.c").read_text())
+
     def test_disabled_loader_never_writes_firmware(self):
         source = (ROOT / "main/api.c").read_text()
         self.assertIn('"/api/firmware/flash", HTTP_POST, loader_disabled', source)

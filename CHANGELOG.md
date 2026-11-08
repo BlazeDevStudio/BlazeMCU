@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0-preview (UART monitoring + release gate, no release)
+
+- RX-only UART readout on ESP32 UART2 and ESP8266 SoftwareSerial.
+- 8N1 1200/2400/4800/9600, 20-second expiry, bounded 128-byte polling, ASCII/hex output.
+- GPIO1/3 debug console never retargeted; hard denies flash/absent/ESP8266 GPIO16.
+- GPIO/I²C/OLED commands cannot overlap with UART capture. ESP32 uses a watchdog and mutex to expire sessions even without browser polling.
+- Host pin/baud regression, end-to-end mock browser checks, documentation.
+- Hardware confirmation, reboot/flash safety, slideshow and manufacturing readiness remain outstanding.
+
 ## 0.5.0-preview (OLED diagnostic driver, no release)
 
 - Added narrow SSD1306/SH1106 128×64 I²C initializers and checker/border/blank test patterns for ESP32 and ESP8266.

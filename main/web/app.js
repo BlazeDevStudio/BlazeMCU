@@ -48,6 +48,7 @@
     });
     text('pageTitle', titles[which]);
     if (which === 'gpio') refreshGpio();
+    if (which === 'serial') refreshUart();
   }
   function selectedPin() {
     return pins.find(function (p) { return p.number === Number($('pin').value); });
@@ -113,6 +114,7 @@
     inspectPin();
     renderPinReference();
     fillI2cPins();
+    fillUartPins();
   }
   function fillI2cPins() {
     var sda = $('i2cSda'), scl = $('i2cScl');
@@ -205,6 +207,91 @@
       $('i2cScan').disabled = false;
     }
   }
+  function fillUartPins() {
+    var select = $('uartPin');
+    select.textContent = '';
+    pins.forEach(function (pin) {
+      var option = document.createElement('option');
+      option.value = String(pin.number);
+      option.textContent = pin.label || ('GPIO' + pin.number);
+      select.appendChild(option);
+    });
+    var esp32 = pins.some(function (pin) { return pin.number === 32; });
+    select.value = esp32 ? '16' : '12';
+    inspectUartPin();
+  }
+  function inspectUartPin() {
+    $('uartAck').checked = false;
+    var pin = selectedUartPin();
+    if (pin) text('uartWarning',(pin.label || ('GPIO' + pin.number)) + ': ' +
+      pin.warning + ' Console pins 1/3 and flash-connected pins are denied.');
+  }
+  function selectedUartPin() {
+    return pins.find(function (p) { return p.number === Number($('uartPin').value); });
+  }
+  async function startUart() {
+    if (!token) {
+      feedback('uartMessage','Verify device admin access on Overview first.','error');
+      return;
+    }
+    $('uartStart').disabled = true;
+    try {
+      var result = await request('/api/uart/start','POST',{
+        pin:Number($('uartPin').value),
+        baud:Number($('uartBaud').value),
+        ack:$('uartAck').checked
+      });
+      feedback('uartMessage',result.message || 'RX session started.','success');
+      text('uartText','');
+      text('uartHex','');
+    } catch (error) {
+      feedback('uartMessage',error.message,'error');
+    } finally {
+      $('uartStart').disabled = false;
+      await refreshUart();
+    }
+  }
+  async function stopUart() {
+    if (!token) {
+      feedback('uartMessage','Verify device admin access before STOP.','error');
+      return;
+    }
+    try {
+      await request('/api/uart/stop','POST');
+      feedback('uartMessage','UART RX session stopped.','success');
+    } catch (error) {
+      feedback('uartMessage','STOP could not be confirmed: ' + error.message,'error');
+    }
+    await refreshUart();
+  }
+  var readingUart = false;
+  async function refreshUart() {
+    if (activeTab !== 'serial' || !token || readingUart) return;
+    readingUart = true;
+    try {
+      var result = await request('/api/uart');
+      var running = result.status === 'running';
+      text('uartState',running ? 'Running' : 'Idle');
+      text('uartRemaining',running ? (result.expires_in_ms/1000).toFixed(1)+' s' : '—');
+      if (result.bytes > 0) {
+        var textData = String(result.text || '');
+        var hexData = String(result.hex || '');
+        var ascii = $('uartText').textContent;
+        var hex = $('uartHex').textContent;
+        text('uartText',(ascii === 'No captured data.' ? '' : ascii).concat(textData).slice(-4000));
+        text('uartHex',(hex === '—' ? '' : hex).concat(hexData+' ').slice(-4000));
+      }
+    } catch (error) {
+      feedback('uartMessage','Unable to read UART session: '+error.message,'error');
+    } finally {
+      readingUart = false;
+    }
+  }
+  function clearUartLog() {
+    text('uartText','No captured data.');
+    text('uartHex','—');
+  }
+
   function renderPinReference() {
     var container = $('pinRows');
     var term = $('pinSearch').value.trim().toLowerCase();
@@ -375,6 +462,10 @@
   $('oledAddress').addEventListener('change', function () { $('oledConfirm').checked = false; });
   $('oledPattern').addEventListener('change', function () { $('oledConfirm').checked = false; });
   $('oledRun').addEventListener('click', runOled);
+  $('uartPin').addEventListener('change', inspectUartPin);
+  $('uartStart').addEventListener('click', startUart);
+  $('uartStop').addEventListener('click', stopUart);
+  $('uartClear').addEventListener('click', clearUartLog);
   updateControls();
   showTab('dashboard');
   (async function init() {
@@ -390,4 +481,5 @@
   }());
   // Network and GPIO status are polled only when their tab is open.
   setInterval(refreshGpio, 1000);
+  setInterval(refreshUart, 500);
 }());

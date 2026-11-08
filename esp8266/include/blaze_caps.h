@@ -53,3 +53,12 @@ inline Blaze8266Decision blaze8266I2cPolicy(int sda, int scl, bool acknowledged)
     return BLAZE8266_ACK_REQUIRED;
   return BLAZE8266_ALLOW;
 }
+
+
+/* UART0 is reserved for provisioning; GPIO16 lacks conventional edge IRQs.
+ * RX-only can use bootstraps with ACK, never flash or analog-only.
+ */
+inline Blaze8266Decision blaze8266UartPolicy(int pin, bool acknowledged) {
+  if (pin == 1 || pin == 3 || pin == 16) return BLAZE8266_DENY;
+  return blaze8266Policy(pin, false, acknowledged);
+}

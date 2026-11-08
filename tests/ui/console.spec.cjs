@@ -22,6 +22,7 @@ const pins = Array.from({length: 40}, (_, number) => {
 async function mockDevice(page) {
   const state = {status: 'idle', pin: -1, mode: 'input', level: 0,
     rising_edges: 0, falling_edges: 0, expires_in_ms: 0};
+  const serial = {status:'idle',pin:-1,baud:0,expires_in_ms:0,bytes:0,hex:'',text:''};
   const calls = [];
   await page.route('**/api/**', async route => {
     const req = route.request();
@@ -54,6 +55,21 @@ async function mockDevice(page) {
     } else if (path === '/api/gpio/stop') {
       Object.assign(state, {status:'idle', pin:-1, expires_in_ms:0});
       body = {status:'idle'};
+    } else if (path === '/api/uart/start' && method === 'POST') {
+      const input = req.postDataJSON();
+      if ([1,3,6,7,8,9,10,11,16].includes(input.pin)) {
+        status = 422; body = {message:'Reserved UART pin'};
+      } else {
+        Object.assign(serial,{status:'running',pin:input.pin,baud:input.baud,
+          expires_in_ms:18000,bytes:2,hex:'4849',text:'HI'});
+        body = {status:'running',message:'RX-only UART listening for at most 20 seconds'};
+      }
+    } else if (path === '/api/uart/stop' && method === 'POST') {
+      Object.assign(serial,{status:'idle',pin:-1,baud:0,expires_in_ms:0,bytes:0,hex:'',text:''});
+      body = {status:'idle'};
+    } else if (path === '/api/uart' && method === 'GET') {
+      body = {...serial};
+      serial.bytes = 0; serial.hex = ''; serial.text = '';
     } else if (path === '/api/i2c/scan' && method === 'POST') {
       const input = req.postDataJSON();
       if (input.sda === input.scl) {
@@ -167,4 +183,28 @@ test('OLED requires model confirmation and never silently guesses display type',
   await page.locator('#oledRun').click();
   await expect(page.locator('#oledMessage')).toContainText('Confirm the actual');
   expect(calls.filter(x => x.path === '/api/oled/test')).toHaveLength(1);
+});
+
+test('UART RX-only session: auth, pin selection, bounded capture, STOP', async ({page}) => {
+  const calls = await connect(page);
+  await page.locator('#tab-serial').click();
+  await page.locator('#uartStart').click();
+  await expect(page.locator('#uartMessage')).toContainText('Verify device admin access');
+  expect(calls.filter(x => x.path === '/api/uart/start')).toHaveLength(0);
+  await page.locator('#tab-dashboard').click();
+  await authenticate(page);
+  await page.locator('#tab-serial').click();
+  await expect(page.locator('#uartPin')).toHaveValue('16');
+  await page.locator('#uartPin').selectOption('34');
+  await page.locator('#uartBaud').selectOption('9600');
+  await page.locator('#uartStart').click();
+  await expect(page.locator('#uartMessage')).toContainText('RX-only UART listening');
+  await expect(page.locator('#uartText')).toContainText('HI');
+  await expect(page.locator('#uartHex')).toContainText('4849');
+  await page.locator('#uartStop').click();
+  await expect(page.locator('#uartMessage')).toContainText('UART RX session stopped');
+  await expect(page.locator('#uartState')).toHaveText('Idle');
+  expect(calls.some(x=>x.path==='/api/uart/start' && x.authorized)).toBe(true);
+  await page.locator('#uartClear').click();
+  await expect(page.locator('#uartText')).toHaveText('No captured data.');
 });

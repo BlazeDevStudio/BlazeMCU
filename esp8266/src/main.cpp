@@ -4,6 +4,8 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
+#include "../../common/uart_limits.h"
 #include <stddef.h>
 #include <string.h>
 #include "blaze_caps.h"
@@ -39,6 +41,23 @@ static int lastLevel = 0;
 static uint32_t rising = 0, falling = 0;
 static uint32_t startAt = 0, lastSample = 0;
 static bool initialized = false;
+static SoftwareSerial uartReader;
+static int uartPin = -1;
+static int uartBaud = 0;
+static uint32_t uartStarted = 0;
+static void uartStop() {
+  if (uartPin < 0) return;
+  const int pin = uartPin;
+  uartReader.end();
+  uartPin = -1;
+  uartBaud = 0;
+  uartStarted = 0;
+  pinMode(pin,INPUT); // Only our selected RX pin; no TX or UART0 console use
+}
+static void uartTick() {
+  if (uartPin >= 0 && static_cast<uint32_t>(millis()-uartStarted) >= BLAZE_UART_LEASE_MS)
+    uartStop();
+}
 
 static uint32_t credentialChecksum(const Credentials &c) {
   // FNV-1a is a corruption check, not authentication or key derivation.
@@ -144,7 +163,7 @@ static void tickLab() {
 static void statusGet() {
   StaticJsonDocument<512> doc;
   doc["product"]="BlazeMCU ESP Starter";
-  doc["version"]="0.5.0-preview-esp8266";
+  doc["version"]="0.6.0-preview-esp8266";
   doc["board"]=BOARD;
   doc["cores"]=1;
   doc["heap_free"]=ESP.getFreeHeap();
@@ -244,6 +263,10 @@ static void gpioPost() {
   if (decision==BLAZE8266_DENY) {
     errorJson(422,"Unsupported digital operation: flash, absent, analog-only or input-only pin"); return;
   }
+  uartTick();
+  if (uartPin >= 0) {
+    errorJson(409,"Stop the UART receiver before starting a GPIO experiment"); return;
+  }
   releasePin();
   rising=falling=0;
   if (pwm) {
@@ -299,8 +322,9 @@ static void i2cScanPost() {
     errorJson(422, "Unsupported or identical I2C pins (GPIO16 unavailable for I2C)"); return;
   }
   tickLab();
-  if (activePin >= 0) {
-    errorJson(409, "Stop the active GPIO experiment before scanning I2C"); return;
+  uartTick();
+  if (activePin >= 0 || uartPin >= 0) {
+    errorJson(409, "Stop the active GPIO/UART experiment before scanning I2C"); return;
   }
   // Temporarily claim SDA/SCL. Never write a sensor/display register.
   Wire.begin(sda, scl);
@@ -396,8 +420,9 @@ static void oledTestPost() {
     errorJson(422,"Unsupported OLED SDA/SCL pin pairing"); return;
   }
   tickLab();
-  if (activePin >= 0) {
-    errorJson(409,"STOP active GPIO experiment before OLED test"); return;
+  uartTick();
+  if (activePin >= 0 || uartPin >= 0) {
+    errorJson(409,"STOP active GPIO/UART experiment before OLED test"); return;
   }
   Wire.begin(sda,scl);
   Wire.setClock(100000);
@@ -430,6 +455,83 @@ static void oledTestPost() {
   StaticJsonDocument<192> result;
   result["status"]="completed";
   result["note"]="Test pattern sent; unverified on actual display. Use Blank to clear display RAM.";
+  sendJson(200,result);
+}
+static void uartStartPost() {
+  if (!requireAdmin()) return;
+  String raw = server.arg("plain");
+  if (raw.length() == 0 || raw.length() > 256) {
+    errorJson(413,"UART request must be JSON <=256 bytes"); return;
+  }
+  StaticJsonDocument<256> obj;
+  if (deserializeJson(obj,raw) || !obj["pin"].is<int>() ||
+      !obj["baud"].is<int>() ||
+      (obj.containsKey("ack") && !obj["ack"].is<bool>())) {
+    errorJson(400,"UART RX pin and baud must be integers"); return;
+  }
+  const int pin = obj["pin"].as<int>(), baud = obj["baud"].as<int>();
+  const bool acknowledged = obj["ack"] | false;
+  if (!blaze_uart_baud_supported(baud)) {
+    errorJson(422,"UART supports 1200/2400/4800/9600 baud 8N1 only"); return;
+  }
+  const Blaze8266Decision decision = blaze8266UartPolicy(pin,acknowledged);
+  if (decision == BLAZE8266_ACK_REQUIRED) {
+    errorJson(409,"Acknowledge boot-sensitive UART RX pin"); return;
+  }
+  if (decision != BLAZE8266_ALLOW) {
+    errorJson(422,"Reserved, flash or unavailable UART RX pin denied"); return;
+  }
+  uartTick();
+  tickLab();
+  if (uartPin >= 0 || activePin >= 0) {
+    errorJson(409,"Stop active UART/GPIO experiment before starting another"); return;
+  }
+  uartReader.begin(baud,SWSERIAL_8N1,pin,-1,false,128);
+  if (!uartReader.isListening()) {
+    uartReader.end();
+    pinMode(pin,INPUT);
+    errorJson(503,"Software UART receiver could not start"); return;
+  }
+  uartPin = pin; uartBaud = baud; uartStarted = millis();
+  StaticJsonDocument<160> result;
+  result["status"]="running";
+  result["message"]="RX-only UART listening for at most 20 seconds";
+  sendJson(200,result);
+}
+static void uartGet() {
+  if (!requireAdmin()) return;
+  uartTick();
+  String hex, preview;
+  hex.reserve(2*BLAZE_UART_MAX_READ+1);
+  preview.reserve(BLAZE_UART_MAX_READ+1);
+  const char digits[]="0123456789ABCDEF";
+  int bytes = 0;
+  while (uartPin >= 0 && uartReader.available() && bytes < BLAZE_UART_MAX_READ) {
+    const int byteRead = uartReader.read();
+    if (byteRead < 0) break;
+    const uint8_t value = static_cast<uint8_t>(byteRead);
+    hex += digits[value >> 4];
+    hex += digits[value & 15];
+    preview += (value >= 32 && value <= 126) ? char(value) :
+               (value == 10 ? '\n' : '.');
+    bytes++;
+  }
+  StaticJsonDocument<896> result;
+  result["status"]=uartPin<0 ? "idle":"running";
+  result["pin"]=uartPin;
+  result["baud"]=uartBaud;
+  const uint32_t delta=static_cast<uint32_t>(millis()-uartStarted);
+  result["expires_in_ms"]=uartPin<0 ? 0 : (delta>=BLAZE_UART_LEASE_MS ? 0 : BLAZE_UART_LEASE_MS-delta);
+  result["bytes"]=bytes;
+  result["hex"]=hex;
+  result["text"]=preview;
+  sendJson(200,result);
+}
+static void uartStopPost() {
+  if (!requireAdmin()) return;
+  uartStop();
+  StaticJsonDocument<96> result;
+  result["status"]="idle";
   sendJson(200,result);
 }
 static void loaderDisabled() {
@@ -469,6 +571,9 @@ static void beginServer() {
   server.on("/api/gpio/stop",HTTP_POST,gpioStop);
   server.on("/api/i2c/scan",HTTP_POST,i2cScanPost);
   server.on("/api/oled/test",HTTP_POST,oledTestPost);
+  server.on("/api/uart",HTTP_GET,uartGet);
+  server.on("/api/uart/start",HTTP_POST,uartStartPost);
+  server.on("/api/uart/stop",HTTP_POST,uartStopPost);
   server.on("/api/firmware/flash",HTTP_POST,loaderDisabled);
   server.on("/api/firmware/preboot",HTTP_POST,loaderDisabled);
   server.onNotFound([](){ errorJson(404,"Unknown route"); });
@@ -505,6 +610,7 @@ void loop() {
   if (initialized) {
     server.handleClient();
     tickLab();
+    uartTick();
   }
   delay(1); // Yield to Wi-Fi/watchdog. No blocking lab delays.
 }

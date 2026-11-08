@@ -1,6 +1,6 @@
 # BlazeMCU — ESP Starter & Hardware Laboratory
 
-**0.5.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
+**0.6.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
 
 A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board starter firmware, intentionally separate from Blaze MCU Studio, BlazePwifi, Phoenix, and the CoinOperatedEcosystem.
 
@@ -16,8 +16,9 @@ A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board star
 - Session-only GPIO; 20-second timeout and explicit STOP release; no persisted GPIO choices.
 - Admin-protected **I²C 7-bit address discovery** (0x08–0x77), with selectable SDA/SCL, safe board pin policy, fixed bounded probing, and no persistent bus settings. A responding address does not identify a display controller.
 - Opt-in **SSD1306/SH1106 128×64 OLED test patterns** with manually selected controller at 0x3C/0x3D, bounded writes and explicit wiring confirmation. Not an auto-detector and not yet physically validated.
+- Admin-protected **RX-only UART monitor** at 1200/2400/4800/9600 baud, 8N1; 20-second lease; no TX, serial-console takeover, or stored input. See docs/UART.md.
 
-**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, general I²C register tools, SPI diagnostics, display slideshow/other controller drivers, UART monitor, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
+**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, general I²C register tools, SPI diagnostics, display slideshow/other controller drivers, UART TX, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
 
 ## Build
 
@@ -78,6 +79,15 @@ automatically cleared; select Blank to clear. Verify the actual OLED board,
 power supply, 3.3 V SDA/SCL pull-ups and controller datasheet before use.
 Not compatible with 128×32, HD44780, SPI TFTs or other unverified controllers.
 See [OLED diagnostics](docs/OLED.md).
+
+## UART RX diagnostics
+
+The Serial tab accepts an external 3.3 V compatible UART RX signal only.
+Classic ESP32 uses UART2; ESP8266 uses its pinned SoftwareSerial core.
+Console GPIO1/3 are always denied, as are flash and unsupported pins.
+Receive-only 8N1 sessions expire after 20 seconds; data stays in volatile memory
+and limited browser logs. See [UART reference](docs/UART.md). This remains
+unverified on physical serial hardware.
 
 ## Quality gates
 

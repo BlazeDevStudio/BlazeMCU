@@ -1,4 +1,5 @@
 #include "lab.h"
+#include "uart_monitor.h"
 #include "../common/pwm_limits.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
@@ -73,6 +74,7 @@ esp_err_t blaze_lab_start(int pin, bool output, int level, bool pullup, bool ack
   /* ESP32 GPIO34-39 have no internal pulls; never silently omit a requested pull. */
   if ((pullup && (output || pin >= 34)) || (level != 0 && level != 1)) return ESP_ERR_INVALID_ARG;
   if (!lock || xSemaphoreTake(lock, pdMS_TO_TICKS(250)) != pdTRUE) return ESP_ERR_TIMEOUT;
+  if (blaze_uart_active()) { xSemaphoreGive(lock); return ESP_ERR_INVALID_STATE; }
   release_locked();
   rising_count = falling_count = 0;
   gpio_config_t cfg = {0};
@@ -105,6 +107,7 @@ esp_err_t blaze_lab_pwm_start(int pin, int frequency_hz, int duty_percent, bool 
     return ESP_ERR_NOT_SUPPORTED;
   if (!lock || xSemaphoreTake(lock, pdMS_TO_TICKS(250)) != pdTRUE)
     return ESP_ERR_TIMEOUT;
+  if (blaze_uart_active()) { xSemaphoreGive(lock); return ESP_ERR_INVALID_STATE; }
   release_locked();
   rising_count = falling_count = 0;
   ledc_timer_config_t timer = {
