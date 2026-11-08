@@ -1,6 +1,6 @@
 # BlazeMCU — ESP Starter & Hardware Laboratory
 
-**0.3.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
+**0.4.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
 
 A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board starter firmware, intentionally separate from Blaze MCU Studio, BlazePwifi, Phoenix, and the CoinOperatedEcosystem.
 
@@ -14,8 +14,9 @@ A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board star
 - Admin-token-gated **single-pin** digital HIGH/LOW or sampled input testing, plus PWM pulse/brightness control at 100–1000 Hz and 0–100% duty (backend enforced).
 - Sensitive pin acknowledgment, input-only rejection of output driving, flash-pin hard deny.
 - Session-only GPIO; 20-second timeout and explicit STOP release; no persisted GPIO choices.
+- Admin-protected **I²C 7-bit address discovery** (0x08–0x77), with selectable SDA/SCL, safe board pin policy, fixed bounded probing, and no persistent bus settings. A responding address does not identify a display controller.
 
-**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, I²C/SPI diagnostics, displays, slideshow, UART monitor, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
+**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, I²C register tools, SPI diagnostics, display drivers/slideshow, UART monitor, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
 
 ## Build
 
@@ -57,6 +58,15 @@ The ESP32-only 4 MB partition plan reserves factory firmware, OTA metadata and t
 The only authored browser sources are `main/web/index.html`, `main/web/style.css` and `main/web/app.js`. The ESP32 embeds and serves each separately via ESP-IDF; the ESP8266 PlatformIO pre-build generator embeds exactly the same assets in PROGMEM. No duplicate or stale web implementation is committed to `esp8266/`.
 
 The dashboard verifies an admin token through `GET /api/auth/check` before activating authenticated controls. An invalid token is not retained in browser state. The token and GPIO lab selections stay in page memory only. The web UI has no external fonts, CDN scripts, telemetry, local storage or internet dependency; it uses a Content Security Policy without `unsafe-inline`. This strengthens browser security but does not solve local-network eavesdropping or exposed serial provisioning secrets.
+
+## I²C wiring and discovery
+
+The Display tab now exposes I²C address scanning (no display initialization or slideshow).
+ESP32 reference defaults are GPIO21 SDA / GPIO22 SCL; ESP8266 defaults GPIO4/D2 SDA / GPIO5/D1 SCL.
+Use external pull-ups to **3.3 V**, do not use the board with unknown or 5 V logic,
+and release active GPIO experiments before scanning. Every documented pin can be
+selected, but unsupported flash/input-only/GPIO16 (ESP8266) operations are refused.
+No bus settings or addresses are persisted. See [I²C instructions](docs/I2C.md).
 
 ## Quality gates
 

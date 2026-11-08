@@ -112,6 +112,66 @@
     if (preferred) select.value = String(preferred.number);
     inspectPin();
     renderPinReference();
+    fillI2cPins();
+  }
+  function fillI2cPins() {
+    var sda = $('i2cSda'), scl = $('i2cScl');
+    [sda, scl].forEach(function (select) {
+      select.textContent = '';
+      pins.forEach(function (pin) {
+        var option = document.createElement('option');
+        option.value = String(pin.number);
+        option.textContent = pin.label || ('GPIO' + pin.number);
+        select.appendChild(option);
+      });
+    });
+    var esp32 = pins.some(function (pin) { return pin.number === 32; });
+    sda.value = esp32 ? '21' : '4';
+    scl.value = esp32 ? '22' : '5';
+    inspectI2cPins();
+  }
+  function inspectI2cPins() {
+    var sda = pins.find(function (p) { return p.number === Number($('i2cSda').value); });
+    var scl = pins.find(function (p) { return p.number === Number($('i2cScl').value); });
+    $('i2cAck').checked = false;
+    if (!sda || !scl) return;
+    text('i2cWarnings', 'SDA: ' + sda.warning + ' SCL: ' + scl.warning +
+      (sda.number === scl.number ? ' Both pins must be different.' : '') +
+      (!sda.input || !sda.output || !scl.input || !scl.output ?
+        ' One or both pins cannot run I²C on this board.' : ''));
+  }
+  async function scanI2c() {
+    if (!token) {
+      feedback('i2cMessage', 'Verify admin access on Overview before scanning.', 'error');
+      return;
+    }
+    $('i2cScan').disabled = true;
+    $('i2cResults').textContent = '';
+    feedback('i2cMessage', 'Scanning addresses · brief local bus operation…');
+    try {
+      var result = await request('/api/i2c/scan', 'POST', {
+        sda: Number($('i2cSda').value),
+        scl: Number($('i2cScl').value),
+        ack: $('i2cAck').checked
+      });
+      if (!Array.isArray(result.addresses)) throw new Error('Invalid scan response');
+      var addresses = result.addresses.filter(function (addr) {
+        return Number.isInteger(addr) && addr >= 0x08 && addr <= 0x77;
+      });
+      feedback('i2cMessage', addresses.length ? addresses.length +
+        ' address(es) acknowledged. Device type not identified.' :
+        'Scan completed · no devices responded. Check 3.3 V power and pull-ups.', 'success');
+      addresses.forEach(function (addr) {
+        var item = document.createElement('span');
+        item.className = 'address-tag';
+        item.textContent = '0x' + addr.toString(16).toUpperCase().padStart(2, '0');
+        $('i2cResults').appendChild(item);
+      });
+    } catch (error) {
+      feedback('i2cMessage', 'Scan did not complete: ' + error.message, 'error');
+    } finally {
+      $('i2cScan').disabled = false;
+    }
   }
   function renderPinReference() {
     var container = $('pinRows');
@@ -276,6 +336,9 @@
   $('pinSearch').addEventListener('input', renderPinReference);
   $('start').addEventListener('click', startTest);
   $('stop').addEventListener('click', stopTest);
+  $('i2cSda').addEventListener('change', inspectI2cPins);
+  $('i2cScl').addEventListener('change', inspectI2cPins);
+  $('i2cScan').addEventListener('click', scanI2c);
   updateControls();
   showTab('dashboard');
   (async function init() {

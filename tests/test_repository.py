@@ -123,6 +123,15 @@ class RepoContractTests(unittest.TestCase):
         self.assertNotIn("No PWM, reaction mappings", esp8266)
         self.assertIn("ESP8266 supports bounded software PWM", esp8266)
 
+    def test_browser_smoke_suite_is_hardware_mock_only(self):
+        test_source = (ROOT / "tests/ui/console.spec.cjs").read_text()
+        config_source = (ROOT / "tests/ui/playwright.config.cjs").read_text()
+        self.assertIn("page.route('**/api/**'", test_source)
+        self.assertIn("mobile-chromium", config_source)
+        self.assertIn("desktop-chromium", config_source)
+        self.assertIn("0x3C", test_source)
+        self.assertIn("simulated API, no hardware", (ROOT / ".github/workflows/esp32-preview.yml").read_text().lower())
+
     def test_disabled_loader_never_writes_firmware(self):
         source = (ROOT / "main/api.c").read_text()
         self.assertIn('"/api/firmware/flash", HTTP_POST, loader_disabled', source)

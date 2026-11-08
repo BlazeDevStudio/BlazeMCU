@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0-preview (I²C hardware lab preview — no release)
+
+- Both targets implement bounded I²C address-only discovery with configurable SDA/SCL.
+- ESP32 uses the ESP-IDF v5.5 I²C master bus driver; ESP8266 uses the pinned Arduino Wire implementation.
+- Reject identical, flash, input-only and unsupported bus pins; strapping/UART pins require acknowledgment.
+- Refuse scanning while GPIO experiments are active, use 3.3 V wiring warnings, and restore pins after scan.
+- UI shows responding hexadecimal addresses, explicitly not inferred controller models.
+- Added native permission regressions and deterministic simulated browser UI smoke tests.
+- No physical I²C/display testing performed; full display drivers/slideshow remain unavailable.
+
 ## 0.3.0-preview (structure and UI/UX cleanup — no release)
 
 - Split the shared dashboard into semantic HTML, CSS and JavaScript with one source of truth.

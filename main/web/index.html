@@ -16,7 +16,7 @@
         <div class="mark" aria-hidden="true">B<span>/</span>M</div>
         <div><div class="product">BlazeMCU</div><div class="subtitle">ESP starter · Hardware laboratory</div></div>
       </div>
-      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.3.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
+      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.4.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
     </div>
   </header>
   <main class="shell">
@@ -135,9 +135,26 @@
     </section>
 
     <section id="displays" role="tabpanel" aria-labelledby="tab-displays" hidden>
-      <article class="panel narrow"><div class="panel-head"><h2>Display diagnostics</h2><span class="state">Not implemented</span></div>
-        <p>I²C and SPI driver initialization, the address scanner and the slideshow engine are not active in this preview.</p>
-        <p class="fine-print">Planned drivers: SSD1306, SH1106, HD44780 I²C, ST7735, ST7789, ILI9341. An I²C acknowledgment alone cannot identify a display controller; SPI displays require explicit configuration.</p>
+      <article class="panel narrow">
+        <div class="panel-head"><h2>I²C bus discovery</h2><span class="state">Address probe only</span></div>
+        <p>Scan for seven-bit responding addresses (0x08–0x77) at 100 kHz. This does not identify or initialize an OLED, LCD or sensor controller. Connect external SDA/SCL pull-ups to 3.3 V; a powered module may already include them.</p>
+        <div class="field-row">
+          <div class="field"><label for="i2cSda">SDA pin</label><select id="i2cSda"><option>Loading pins…</option></select></div>
+          <div class="field"><label for="i2cScl">SCL pin</label><select id="i2cScl"><option>Loading pins…</option></select></div>
+        </div>
+        <div class="pin-detail">
+          <div class="pin-detail-top"><strong>Wiring limitations</strong><span>3.3 V ONLY</span></div>
+          <p id="i2cWarnings">Select the actual pins connected to your module.</p>
+        </div>
+        <label class="acknowledge"><input type="checkbox" id="i2cAck"><span>I have verified wiring and understand that boot, UART, flash and unavailable pins have restrictions. Acknowledgment cannot override unsafe operations.</span></label>
+        <div class="actions"><button id="i2cScan" class="primary" type="button">Scan I²C addresses</button></div>
+        <p class="feedback" id="i2cMessage" role="status">Idle · GPIO lab must be stopped before scanning.</p>
+        <div id="i2cResults" class="address-results" aria-live="polite"></div>
+        <p class="fine-print">A response only means that a device acknowledged its address. Empty results do not prove that no device is connected; power, pull-ups, wiring and controller configuration matter.</p>
+      </article>
+      <article class="panel narrow companion">
+        <div class="panel-head"><h2>Display drivers & slideshow</h2><span class="state">Not implemented</span></div>
+        <p>SSD1306, SH1106, HD44780 I²C, ST7735, ST7789 and ILI9341 initialization, graphics and slideshows remain unavailable. SPI display discovery is manual by design.</p>
       </article>
     </section>
 
@@ -159,7 +176,7 @@
         <p>Never treat a matching filename, I²C address, or GPIO capability as a guarantee of hardware compatibility. Consult the board manufacturer's pinout before connecting loads.</p>
       </article>
     </section>
-    <footer>BlazeDevStudio · Offline device tools <span>Build 0.3.0-preview · No cloud services required</span></footer>
+    <footer>BlazeDevStudio · Offline device tools <span>Build 0.4.0-preview · No cloud services required</span></footer>
   </main>
 </body>
 </html>

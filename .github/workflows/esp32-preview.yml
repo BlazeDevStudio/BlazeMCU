@@ -66,3 +66,18 @@ jobs:
             build/partition_table/partition-table.bin
           if-no-files-found: error
           retention-days: 7
+
+  ui-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Playwright test runner
+        run: npm install --prefix tests/ui --no-audit --no-fund --no-package-lock
+      - name: Install Chromium for deterministic mock-API UI tests
+        run: ./tests/ui/node_modules/.bin/playwright install --with-deps chromium
+      - name: Exercise desktop and 390px mobile UI (simulated API, no hardware)
+        run: ./tests/ui/node_modules/.bin/playwright test --config=tests/ui/playwright.config.cjs

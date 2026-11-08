@@ -1,6 +1,7 @@
 #include "api.h"
 #include "board_caps.h"
 #include "lab.h"
+#include "i2c_scan.h"
 #include "../common/pwm_limits.h"
 #include "security.h"
 #include "cJSON.h"
@@ -87,7 +88,7 @@ static esp_err_t status_get(httpd_req_t *req) {
   esp_flash_get_size(NULL, &flash);
   cJSON *obj = cJSON_CreateObject();
   cJSON_AddStringToObject(obj, "product", "BlazeMCU ESP Starter");
-  cJSON_AddStringToObject(obj, "version", "0.3.0-preview");
+  cJSON_AddStringToObject(obj, "version", "0.4.0-preview");
   cJSON_AddStringToObject(obj, "board", blaze_board_id());
   cJSON_AddNumberToObject(obj, "cores", info.cores);
   cJSON_AddNumberToObject(obj, "heap_free", esp_get_free_heap_size());
@@ -209,6 +210,50 @@ static esp_err_t gpio_post(httpd_req_t *req) {
           "Test active for up to 20 seconds; STOP to release the pin");
   return json_send(req, out, NULL);
 }
+static esp_err_t i2c_scan_post(httpd_req_t *req) {
+  if (!authorized(req)) return require_token(req);
+  cJSON *obj = NULL;
+  if (receive_small_json(req, &obj) != ESP_OK)
+    return error_response(req, "400 Bad Request", "Expected bounded JSON request");
+  cJSON *sda = cJSON_GetObjectItemCaseSensitive(obj, "sda");
+  cJSON *scl = cJSON_GetObjectItemCaseSensitive(obj, "scl");
+  cJSON *ack = cJSON_GetObjectItemCaseSensitive(obj, "ack");
+  if (!cJSON_IsNumber(sda) || !cJSON_IsNumber(scl) ||
+      sda->valuedouble != (double)sda->valueint ||
+      scl->valuedouble != (double)scl->valueint ||
+      (ack && !cJSON_IsBool(ack))) {
+    cJSON_Delete(obj);
+    return error_response(req, "400 Bad Request", "SDA/SCL must be GPIO integers, ack a boolean");
+  }
+  const int sda_pin = sda->valueint, scl_pin = scl->valueint;
+  const bool acknowledged = cJSON_IsTrue(ack);
+  cJSON_Delete(obj);
+  const blaze_policy_t permission = blaze_i2c_decide(sda_pin, scl_pin, acknowledged);
+  if (permission == BLAZE_ACK_REQUIRED)
+    return error_response(req, "409 Conflict", "Sensitive SDA/SCL: acknowledge pin warnings first");
+  if (permission != BLAZE_ALLOW)
+    return error_response(req, "422 Unprocessable Entity", "Unsupported or identical I2C pins");
+  uint8_t addresses[BLAZE_I2C_MAX_RESPONDERS] = {0};
+  size_t found = 0;
+  esp_err_t result = blaze_i2c_scan(sda_pin, scl_pin, acknowledged,
+                                    addresses, sizeof(addresses), &found);
+  if (result == ESP_ERR_INVALID_STATE)
+    return error_response(req, "409 Conflict", "Stop the active GPIO experiment before scanning I2C");
+  if (result != ESP_OK)
+    return error_response(req, "503 Service Unavailable",
+                          "I2C probe failed or timed out. Check 3.3V pull-ups and wiring.");
+  cJSON *out = cJSON_CreateObject();
+  if (!out) return ESP_ERR_NO_MEM;
+  cJSON_AddStringToObject(out, "status", "completed");
+  cJSON_AddStringToObject(out, "note", "Address ACK only; device/controller type not identified");
+  cJSON_AddNumberToObject(out, "sda", sda_pin);
+  cJSON_AddNumberToObject(out, "scl", scl_pin);
+  cJSON *found_array = cJSON_AddArrayToObject(out, "addresses");
+  if (!found_array) { cJSON_Delete(out); return ESP_ERR_NO_MEM; }
+  for (size_t i = 0; i < found; ++i) cJSON_AddItemToArray(found_array, cJSON_CreateNumber(addresses[i]));
+  return json_send(req, out, NULL);
+}
+
 static esp_err_t gpio_stop(httpd_req_t *req) {
   if (!authorized(req)) return require_token(req);
   if (blaze_lab_stop() != ESP_OK) return error_response(req, "503 Service Unavailable", "Failed to stop test");
@@ -227,7 +272,7 @@ static esp_err_t register_route(const char *uri, httpd_method_t method, esp_err_
 }
 esp_err_t blaze_api_start(void) {
   httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-  cfg.max_uri_handlers = 12;
+  cfg.max_uri_handlers = 13;
   cfg.stack_size = 6144;
   esp_err_t e = httpd_start(&server, &cfg);
   if (e != ESP_OK) return e;
@@ -240,6 +285,7 @@ esp_err_t blaze_api_start(void) {
       (e = register_route("/api/gpio", HTTP_GET, gpio_get)) != ESP_OK ||
       (e = register_route("/api/gpio", HTTP_POST, gpio_post)) != ESP_OK ||
       (e = register_route("/api/gpio/stop", HTTP_POST, gpio_stop)) != ESP_OK ||
+      (e = register_route("/api/i2c/scan", HTTP_POST, i2c_scan_post)) != ESP_OK ||
       (e = register_route("/api/firmware/flash", HTTP_POST, loader_disabled)) != ESP_OK ||
       (e = register_route("/api/firmware/preboot", HTTP_POST, loader_disabled)) != ESP_OK) {
     httpd_stop(server);

@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "blazemcu-ui-smoke",
+  "version": "0.4.0",
+  "description": "Mock-API browser smoke tests; not embedded hardware verification",
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  },
+  "scripts": {
+    "test": "playwright test"
+  }
+}

@@ -26,5 +26,14 @@ int main() {
   assert(blaze8266Policy(5,false,false) == BLAZE8266_ALLOW);
   assert(blaze8266Policy(16,true,false) == BLAZE8266_ALLOW);
   assert(!blaze8266Pin(16)->pwm && blaze8266Pin(17)->adc);
-  std::puts("PASS: 18 ESP8266 pins, boot warnings, hard flash deny, A0 no digital");
+  assert(blaze8266I2cPolicy(4,5,false) == BLAZE8266_ALLOW);
+  assert(blaze8266I2cPolicy(4,4,true) == BLAZE8266_DENY);
+  assert(blaze8266I2cPolicy(4,16,true) == BLAZE8266_DENY);
+  assert(blaze8266I2cPolicy(6,5,true) == BLAZE8266_DENY);
+  assert(blaze8266I2cPolicy(17,5,true) == BLAZE8266_DENY);
+  assert(blaze8266I2cPolicy(0,5,false) == BLAZE8266_ACK_REQUIRED);
+  assert(blaze8266I2cPolicy(0,5,true) == BLAZE8266_ALLOW);
+  assert(blaze8266I2cPolicy(1,5,false) == BLAZE8266_ACK_REQUIRED);
+  assert(blaze8266I2cPolicy(1,5,true) == BLAZE8266_ALLOW);
+  std::puts("PASS: ESP8266 GPIO + I2C policy, straps, flash, GPIO16 and A0 denied");
 }

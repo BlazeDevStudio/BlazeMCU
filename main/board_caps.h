@@ -10,7 +10,7 @@ typedef struct {
   bool digital_in;
   bool digital_out;
   bool adc;           /* Capability reference, analog testing not implemented */
-  bool pwm;           /* Capability reference, PWM testing not implemented */
+  bool pwm;           /* Capability; bounded single-pin PWM is implemented */
   bool strap;
   bool reserved;      /* Active system/peripheral caution; not a permission bypass */
   const char *category;

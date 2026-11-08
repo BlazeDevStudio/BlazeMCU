@@ -39,3 +39,7 @@ PWM uses ESP32 LEDC or ESP8266 software PWM at 100–1000 Hz (inclusive) with 0�
 ## Browser administration (0.3 preview)
 
 The dashboard must confirm the per-device admin token with /api/auth/check before allowing GPIO mutation. CSS and JavaScript are served from device flash with CSP that disallows inline scripts and styles; no external assets are loaded. This is an offline lab UI, not an HTTPS or customer-account system. Physical serial credential exposure and AP-side attack resistance still require testing and manufacturing hardening.
+
+## I²C address discovery
+
+Address-only bus scanning is available on both ESP32 and ESP8266, but **not hardware verified**. Avoid 5 V pull-ups. The driver checks 0x08–0x77 at bounded timeout and releases pins after the scan, refusing to interrupt an active GPIO lease. It never identifies, initializes, or drives a display controller. See docs/I2C.md.

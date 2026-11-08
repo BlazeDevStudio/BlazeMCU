@@ -139,3 +139,10 @@ footer { display:flex; justify-content:space-between; gap:12px; color:#77858e; f
   footer span { display:block; margin-top:5px; }
 }
 @media(prefers-reduced-motion:reduce){.lease-fill { transition:none; }}
+
+/* Session-only I2C diagnostics: no decorative animation or hidden pin options. */
+.companion { margin-top:16px; }
+.address-results { display:flex; flex-wrap:wrap; align-items:center; gap:9px; padding-top:11px; }
+.address-tag { font-size:13px; font-weight:750; font-variant-numeric:tabular-nums;
+  background:#edf3f0; color:#1f624a; border:1px solid #bed5c8;
+  padding:7px 10px; border-radius:5px; }

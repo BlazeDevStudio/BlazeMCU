@@ -3,6 +3,7 @@
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <Wire.h>
 #include <stddef.h>
 #include <string.h>
 #include "blaze_caps.h"
@@ -142,7 +143,7 @@ static void tickLab() {
 static void statusGet() {
   StaticJsonDocument<512> doc;
   doc["product"]="BlazeMCU ESP Starter";
-  doc["version"]="0.3.0-preview-esp8266";
+  doc["version"]="0.4.0-preview-esp8266";
   doc["board"]=BOARD;
   doc["cores"]=1;
   doc["heap_free"]=ESP.getFreeHeap();
@@ -274,6 +275,76 @@ static void gpioStop() {
   doc["status"]="idle";
   sendJson(200,doc);
 }
+static void i2cScanPost() {
+  if (!requireAdmin()) return;
+  String raw = server.arg("plain");
+  if (!raw.length() || raw.length() > 256) {
+    errorJson(413, "I2C request must be JSON up to 256 bytes"); return;
+  }
+  StaticJsonDocument<256> request;
+  if (deserializeJson(request, raw) ||
+      !request["sda"].is<int>() || !request["scl"].is<int>() ||
+      (request.containsKey("ack") && !request["ack"].is<bool>())) {
+    errorJson(400, "SDA/SCL must be GPIO integers, ack a boolean"); return;
+  }
+  const int sda = request["sda"].as<int>();
+  const int scl = request["scl"].as<int>();
+  const bool acknowledged = request["ack"] | false;
+  const Blaze8266Decision permission = blaze8266I2cPolicy(sda, scl, acknowledged);
+  if (permission == BLAZE8266_ACK_REQUIRED) {
+    errorJson(409, "Sensitive SDA/SCL: acknowledge pin warnings first"); return;
+  }
+  if (permission != BLAZE8266_ALLOW) {
+    errorJson(422, "Unsupported or identical I2C pins (GPIO16 unavailable for I2C)"); return;
+  }
+  tickLab();
+  if (activePin >= 0) {
+    errorJson(409, "Stop the active GPIO experiment before scanning I2C"); return;
+  }
+  // Temporarily claim SDA/SCL. Never write a sensor/display register.
+  Wire.begin(sda, scl);
+  Wire.setClock(100000);
+  Wire.setClockStretchLimit(5000); // microseconds; bus still needs external 3.3V pull-ups
+  uint8_t addresses[112] = {};
+  size_t count = 0;
+  const uint32_t begun = millis();
+  bool fault = false;
+  for (uint8_t address = 0x08; address <= 0x77; ++address) {
+    if (static_cast<uint32_t>(millis() - begun) >= 1500) {
+      fault = true; break;
+    }
+    Wire.beginTransmission(address);
+    const uint8_t result = Wire.endTransmission(true);
+    if (result == 0) addresses[count++] = address;
+    else if (result != 2) { fault = true; break; }
+    yield();
+  }
+  // Pinned ESP8266 TwoWire has no end() method. No persistent scan state.
+  pinMode(sda, INPUT);
+  pinMode(scl, INPUT);
+  if (fault) {
+    errorJson(503, "I2C probe failed or timed out. Check 3.3V pull-ups and wiring."); return;
+  }
+  StaticJsonDocument<192> summary;
+  summary["status"] = "completed";
+  summary["note"] = "Address ACK only; device/controller type not identified";
+  summary["sda"] = sda;
+  summary["scl"] = scl;
+  // Use chunked JSON output to avoid unbounded RAM allocation.
+  commonHeaders();
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json; charset=utf-8", "");
+  String opening;
+  serializeJson(summary, opening);
+  opening.remove(opening.length() - 1); // append bounded array to object
+  server.sendContent(opening + ",\"addresses\":[");
+  for (size_t i=0; i<count; ++i) {
+    if (i) server.sendContent(",");
+    server.sendContent(String(addresses[i]));
+  }
+  server.sendContent("]}");
+  server.sendContent("");
+}
 static void loaderDisabled() {
   if (!requireAdmin()) return;
   errorJson(501,"FLASH and PREBOOT unavailable: image validation and recovery not yet proven on ESP8266");
@@ -309,6 +380,7 @@ static void beginServer() {
   server.on("/api/gpio",HTTP_GET,gpioGet);
   server.on("/api/gpio",HTTP_POST,gpioPost);
   server.on("/api/gpio/stop",HTTP_POST,gpioStop);
+  server.on("/api/i2c/scan",HTTP_POST,i2cScanPost);
   server.on("/api/firmware/flash",HTTP_POST,loaderDisabled);
   server.on("/api/firmware/preboot",HTTP_POST,loaderDisabled);
   server.onNotFound([](){ errorJson(404,"Unknown route"); });

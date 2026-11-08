@@ -39,3 +39,17 @@ inline Blaze8266Decision blaze8266Policy(int n, bool output, bool ack) {
   if ((p->strap || p->reserved) && !ack) return BLAZE8266_ACK_REQUIRED;
   return BLAZE8266_ALLOW;
 }
+
+
+/* ESP8266 GPIO16 cannot be used for this software I2C scan. */
+inline Blaze8266Decision blaze8266I2cPolicy(int sda, int scl, bool acknowledged) {
+  if (sda == scl || sda == 16 || scl == 16) return BLAZE8266_DENY;
+  const Blaze8266Pin *d = blaze8266Pin(sda), *c = blaze8266Pin(scl);
+  if (!d || !c || !d->input || !c->input) return BLAZE8266_DENY;
+  const Blaze8266Decision dp = blaze8266Policy(sda, true, acknowledged);
+  const Blaze8266Decision cp = blaze8266Policy(scl, true, acknowledged);
+  if (dp == BLAZE8266_DENY || cp == BLAZE8266_DENY) return BLAZE8266_DENY;
+  if (dp == BLAZE8266_ACK_REQUIRED || cp == BLAZE8266_ACK_REQUIRED)
+    return BLAZE8266_ACK_REQUIRED;
+  return BLAZE8266_ALLOW;
+}
