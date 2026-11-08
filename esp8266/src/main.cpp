@@ -54,7 +54,7 @@ static void fillSecret(char *out, size_t chars) {
   out[chars] = '\0';
 }
 static bool provisionDevice() {
-  if (!EEPROM.begin(EEPROM_BYTES)) return false;
+  EEPROM.begin(EEPROM_BYTES);
   EEPROM.get(0, credentials);
   const bool valid = credentials.marker == CREDS_MAGIC &&
     credentials.version == 1 &&
@@ -259,7 +259,7 @@ static void indexGet() {
   server.send_P(200, PSTR("text/html; charset=utf-8"), BLAZE_INDEX_HTML);
 }
 static void beginServer() {
-  const char *headers[]={"X-Blaze-Token"};
+  const String headers[]={"X-Blaze-Token"};
   server.collectHeaders(headers,1);
   server.on("/",HTTP_GET,indexGet);
   server.on("/api/status",HTTP_GET,statusGet);
