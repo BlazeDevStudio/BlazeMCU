@@ -130,7 +130,7 @@ class RepoContractTests(unittest.TestCase):
         self.assertIn("mobile-chromium", config_source)
         self.assertIn("desktop-chromium", config_source)
         self.assertIn("0x3C", test_source)
-        self.assertIn("simulated API, no hardware", (ROOT / ".github/workflows/esp32-preview.yml").read_text().lower())
+        self.assertIn("simulated api, no hardware", (ROOT / ".github/workflows/esp32-preview.yml").read_text().lower())
 
     def test_disabled_loader_never_writes_firmware(self):
         source = (ROOT / "main/api.c").read_text()
