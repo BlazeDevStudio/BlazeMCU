@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-preview (dual-target GPIO PWM development)
+
+- Shared 100–1000 Hz, 0–100% PWM validation across ESP32 / ESP8266, with hardware LEDC on ESP32 and nonblocking ESP8266 software PWM.
+- Browser frequency/duty sliders and estimated period/on-time for a single pin.
+- Automatic PWM stop/expiry within the existing 20-second session lease.
+- Added native PWM boundary checks and cross-target CI enforcement.
+- No electrical PWM waveform or reboot/timeout has been verified on physical boards.
+
 ## 0.1.1-preview (dual-target development, no release)
 
 - Added dedicated ESP8266 PlatformIO/Arduino-core NodeMCU and D1 mini targets.

@@ -5,14 +5,18 @@ on:
     branches: ["feature/blazemcu-esp-starter"]
     paths:
       - "esp8266/**"
+      - "common/**"
       - "main/web/**"
       - "tests/esp8266_policy_test.cpp"
+      - "tests/pwm_policy_test.c"
       - ".github/workflows/esp8266-preview.yml"
   pull_request:
     paths:
       - "esp8266/**"
+      - "common/**"
       - "main/web/**"
       - "tests/esp8266_policy_test.cpp"
+      - "tests/pwm_policy_test.c"
       - ".github/workflows/esp8266-preview.yml"
   workflow_dispatch:
 
@@ -28,6 +32,8 @@ jobs:
         run: |
           c++ -std=c++11 -Wall -Wextra -Werror tests/esp8266_policy_test.cpp -o /tmp/blaze8266-policy
           /tmp/blaze8266-policy
+          cc -std=c11 -Wall -Wextra -Werror tests/pwm_policy_test.c -o /tmp/blaze-pwm-policy
+          /tmp/blaze-pwm-policy
 
   esp8266-build:
     runs-on: ubuntu-latest

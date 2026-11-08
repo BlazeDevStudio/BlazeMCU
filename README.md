@@ -1,6 +1,6 @@
 # BlazeMCU — ESP Starter & Hardware Laboratory
 
-**0.1.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
+**0.2.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
 
 A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board starter firmware, intentionally separate from Blaze MCU Studio, BlazePwifi, Phoenix, and the CoinOperatedEcosystem.
 
@@ -9,11 +9,11 @@ A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board star
 - ESP-IDF Wi-Fi SoftAP (192.168.4.1); SSID BlazeMCU-XXXX from device MAC.
 - Per-device generated WPA2 AP password and independent admin token in NVS; shown on serial console.
 - Mobile web dashboard and complete 40-entry classic ESP32 pin reference, including unsupported/reserved pins.
-- Admin-token-gated **single-pin** digital HIGH/LOW or sampled input testing.
+- Admin-token-gated **single-pin** digital HIGH/LOW or sampled input testing, plus PWM pulse/brightness control at 100–1000 Hz and 0–100% duty (backend enforced).
 - Sensitive pin acknowledgment, input-only rejection of output driving, flash-pin hard deny.
 - Session-only GPIO; 20-second timeout and explicit STOP release; no persisted GPIO choices.
 
-**Not implemented on either target:** firmware upload, FLASH, PREBOOT, PWM/pulses, input-to-output mapping, debounce, ADC sampling, I²C/SPI diagnostics, displays, slideshow, UART monitor, ESP8266, and compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
+**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, I²C/SPI diagnostics, displays, slideshow, UART monitor, ESP8266, and compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
 
 ## Build
 
@@ -56,6 +56,8 @@ ESP8266's native pin policy is exercised separately:
 
     c++ -std=c++11 -Wall -Wextra -Werror tests/esp8266_policy_test.cpp -o /tmp/blaze8266-policy
     /tmp/blaze8266-policy
+    cc -std=c11 -Wall -Wextra -Werror tests/pwm_policy_test.c -o /tmp/blaze-pwm-policy
+    /tmp/blaze-pwm-policy
 
 Its CI matrix builds NodeMCU 1.0 and D1 mini separately; no hardware reset or electrical proof is implied.
 

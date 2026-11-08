@@ -38,6 +38,24 @@ class RepoContractTests(unittest.TestCase):
         self.assertIn("LEASE_MS 20000", source)
         self.assertIn("release_locked();", source)
 
+    def test_gpio_pwm_is_real_and_bounded_on_both_targets(self):
+        html = (ROOT / "main/web/index.html").read_text()
+        self.assertIn('<option value="pwm">', html)
+        self.assertIn('frequency_hz', html)
+        self.assertIn('duty_percent', html)
+        self.assertIn('min="100" max="1000"', html)
+        esp32 = (ROOT / "main/lab.c").read_text()
+        esp8266 = (ROOT / "esp8266/src/main.cpp").read_text()
+        self.assertIn("ledc_channel_config", esp32)
+        self.assertIn("ledc_stop(", esp32)
+        self.assertIn("analogWriteFreq(", esp8266)
+        self.assertIn("analogWrite(activePin, 0)", esp8266)
+        self.assertIn("blaze_pwm_valid", esp32)
+        self.assertIn("blaze_pwm_valid", esp8266)
+        for source in (esp32, esp8266):
+            self.assertNotIn("nvs_set_", source)
+            self.assertNotIn("esp_ota_write(", source)
+
     def test_disabled_loader_never_writes_firmware(self):
         source = (ROOT / "main/api.c").read_text()
         self.assertIn('"/api/firmware/flash", HTTP_POST, loader_disabled', source)

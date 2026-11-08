@@ -136,7 +136,7 @@ static void tickLab() {
 static void statusGet() {
   StaticJsonDocument<512> doc;
   doc["product"]="BlazeMCU ESP Starter";
-  doc["version"]="0.1.0-preview-esp8266";
+  doc["version"]="0.2.0-preview-esp8266";
   doc["board"]=BOARD;
   doc["cores"]=1;
   doc["heap_free"]=ESP.getFreeHeap();

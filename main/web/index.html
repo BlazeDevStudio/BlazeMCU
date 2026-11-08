@@ -31,7 +31,7 @@ table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{text-align:left
 </style>
 </head>
 <body>
-<header><div><h1>BlazeMCU</h1><small>ESP Starter / Hardware Laboratory</small></div><small>0.1.0 PREVIEW</small></header>
+<header><div><h1>BlazeMCU</h1><small>ESP Starter / Hardware Laboratory</small></div><small>0.2.0 PREVIEW</small></header>
 <main>
 <nav aria-label="Main sections">
 <button data-tab="dashboard" aria-current="page">Dashboard</button>
@@ -52,7 +52,7 @@ table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{text-align:left
 </section>
 <section id="loader">
 <article><h2>Firmware loader</h2><p class="notice">FLASH and PREBOOT are disabled in this preview. No uploaded firmware can run or overwrite the factory image.</p>
-<p>Only compiled ESP32 application images (.bin) may eventually be eligible. Arduino .ino source files are not firmware images.</p>
+<p>Only compiled compatible board-specific application images (.bin) may eventually be eligible. Arduino .ino source files are not firmware images.</p>
 <label for="firmwareFile">Compiled application binary (.bin)</label><input type="file" id="firmwareFile" accept=".bin,application/octet-stream" disabled>
 <div class="actions"><button disabled>PREBOOT · unavailable</button><button disabled>FLASH · unavailable</button></div>
 <p>See Help for Arduino IDE, Arduino CLI, PlatformIO and ESP-IDF export instructions.</p></article>
@@ -61,15 +61,22 @@ table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{text-align:left
 <article><h2>GPIO experiment</h2><p>One pin at a time. All operations expire after 20 seconds and are discarded on reset. Do not exceed 3.3 V GPIO limits.</p>
 <div class="grid"><div>
 <label for="pin">GPIO</label><select id="pin"></select>
-<label for="mode">Requested mode</label><select id="mode"><option value="input">Input monitor</option><option value="output">Output control</option></select>
+<label for="mode">Requested mode</label><select id="mode"><option value="input">Input monitor</option><option value="output">Output control</option><option value="pwm">PWM · pulses / LED dimming</option></select>
 <label for="level">Output state</label><select id="level"><option value="0">LOW</option><option value="1">HIGH</option></select>
 <label><input type="checkbox" id="pullup"> Enable internal pull-up for input (where supported)</label>
+<div id="pwmControls">
+<label for="frequency">PWM frequency: <output id="frequencyValue">500 Hz</output></label>
+<input type="range" id="frequency" min="100" max="1000" step="50" value="500">
+<label for="duty">PWM duty / LED brightness: <output id="dutyValue">50%</output></label>
+<input type="range" id="duty" min="0" max="100" step="1" value="50">
+<p id="pwmEstimate">Estimated period: 2.00 ms · HIGH time: 1.00 ms</p>
+</div>
 </div><div><h2>Selected pin</h2><p id="pinInfo">Loading pin capabilities…</p>
 <label><input type="checkbox" id="ack"> I understand the warning. Proceed anyway where technically supported.</label></div></div>
 <div class="actions"><button class="primary" id="start">Start test</button><button id="stop">STOP / release pin</button></div>
 <p id="gpioMessage" role="status">Idle</p><pre id="gpioStatus">-</pre>
 </article>
-<article><h2>Next-stage functions</h2><p>PWM, pulse generation, reaction mapping, ADC and debounce settings are not connected in this build and are not offered as active controls.</p></article>
+<article><h2>Not yet available</h2><p>Input-to-output reaction mapping, ADC and debounce settings are not connected in this build. PWM supports a single pin at 100–1000 Hz, up to 20 seconds, on PWM-capable pins only. Period and duty values are estimates, not measured waveforms.</p></article>
 </section>
 <section id="displays"><article><h2>Display laboratory</h2><p class="notice">Unimplemented. I²C scanning, SPI drivers, slideshow and frame-rate tests have no active backend yet.</p>
 <p>Planned: SSD1306, SH1106, HD44780 I²C backpack, ST7735, ST7789 and ILI9341. I²C addresses alone cannot identify a display controller; SPI discovery is manual.</p></article></section>
@@ -141,6 +148,25 @@ document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click',
   document.querySelectorAll('section').forEach(x => x.classList.toggle('active', x.id === b.dataset.tab));
 }));
 el('pin').addEventListener('change', showPin);
+function updateControls() {
+  const mode = el('mode').value;
+  const pwm = mode === 'pwm';
+  el('level').disabled = mode !== 'output';
+  el('pullup').disabled = mode !== 'input';
+  el('frequency').disabled = !pwm;
+  el('duty').disabled = !pwm;
+  const freq = Number(el('frequency').value);
+  const duty = Number(el('duty').value);
+  const periodMs = 1000 / freq;
+  asText('frequencyValue', freq + ' Hz');
+  asText('dutyValue', duty + '%');
+  asText('pwmEstimate', 'Estimated period: ' + periodMs.toFixed(2) +
+    ' ms · HIGH time: ' + (periodMs * duty / 100).toFixed(2) + ' ms');
+}
+el('mode').addEventListener('change', updateControls);
+el('frequency').addEventListener('input', updateControls);
+el('duty').addEventListener('input', updateControls);
+updateControls();
 el('tokenApply').addEventListener('click', () => {
   token = el('token').value;
   el('token').value = '';
@@ -149,10 +175,17 @@ el('tokenApply').addEventListener('click', () => {
 el('tokenClear').addEventListener('click', () => { token = ''; asText('authstate', 'Token cleared'); });
 el('start').addEventListener('click', async () => {
   try {
-    const data = await request('/api/gpio','POST',{
-      pin:Number(el('pin').value),mode:el('mode').value,
-      level:Number(el('level').value),pullup:el('pullup').checked,ack:el('ack').checked
-    });
+    const mode = el('mode').value;
+    const body = {
+      pin:Number(el('pin').value),mode,
+      level:Number(el('level').value),pullup:mode === 'input' && el('pullup').checked,
+      ack:el('ack').checked
+    };
+    if (mode === 'pwm') {
+      body.frequency_hz = Number(el('frequency').value);
+      body.duty_percent = Number(el('duty').value);
+    }
+    const data = await request('/api/gpio','POST',body);
     asText('gpioMessage', data.message);
   } catch (err) { asText('gpioMessage', err.message); }
   await updateGpio();

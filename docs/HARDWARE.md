@@ -30,3 +30,7 @@ and counters are RAM-only and reset on device reboot.
 Future display wiring must require explicit controller and pin selection,
 I²C scan only confirms an ACK at an address, and SPI identification requires
 manual selection. Never pretend a missing display was successfully initialized.
+
+## PWM preview
+
+PWM uses ESP32 LEDC or ESP8266 software PWM at 100–1000 Hz (inclusive) with 0–100% duty, one pin at a time, stopped by explicit STOP or session expiry; no physical oscilloscope or power-load validation performed. A displayed period or duty cycle is an estimate, not a measurement. Output drivers must not be directly connected to motors, coils or high-current loads.

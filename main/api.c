@@ -62,7 +62,7 @@ static esp_err_t status_get(httpd_req_t *req) {
   esp_flash_get_size(NULL, &flash);
   cJSON *obj = cJSON_CreateObject();
   cJSON_AddStringToObject(obj, "product", "BlazeMCU ESP Starter");
-  cJSON_AddStringToObject(obj, "version", "0.1.0-preview");
+  cJSON_AddStringToObject(obj, "version", "0.2.0-preview");
   cJSON_AddStringToObject(obj, "board", blaze_board_id());
   cJSON_AddNumberToObject(obj, "cores", info.cores);
   cJSON_AddNumberToObject(obj, "heap_free", esp_get_free_heap_size());
