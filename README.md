@@ -13,7 +13,7 @@ A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board star
 - Sensitive pin acknowledgment, input-only rejection of output driving, flash-pin hard deny.
 - Session-only GPIO; 20-second timeout and explicit STOP release; no persisted GPIO choices.
 
-**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, I²C/SPI diagnostics, displays, slideshow, UART monitor, ESP8266, and compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
+**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, I²C/SPI diagnostics, displays, slideshow, UART monitor, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
 
 ## Build
 

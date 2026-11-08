@@ -62,6 +62,15 @@ class RepoContractTests(unittest.TestCase):
             self.assertNotIn("nvs_set_", source)
             self.assertNotIn("esp_ota_write(", source)
 
+    def test_docs_describe_both_actual_pwm_targets(self):
+        readme = (ROOT / "README.md").read_text()
+        hardware = (ROOT / "docs/HARDWARE.md").read_text()
+        esp8266 = (ROOT / "docs/ESP8266.md").read_text()
+        self.assertIn("NodeMCU / D1 mini", readme)
+        self.assertIn("PWM uses ESP32 LEDC or ESP8266", hardware)
+        self.assertNotIn("No PWM, reaction mappings", esp8266)
+        self.assertIn("ESP8266 supports bounded software PWM", esp8266)
+
     def test_disabled_loader_never_writes_firmware(self):
         source = (ROOT / "main/api.c").read_text()
         self.assertIn('"/api/firmware/flash", HTTP_POST, loader_disabled', source)

@@ -23,7 +23,8 @@ WROVER or ESP8266. Different dev boards may route, label or omit pins.
 The active laboratory supports one pin at a time: digital input sampling at
 approximately 20 ms resolution and manual steady output LOW/HIGH, with a hard
 20-second lease. Counts can miss fast pulses; no interrupt capture, debounce,
-PWM, mappings or display bus drivers exist. STOP releases a claimed GPIO using
+mappings or display bus drivers exist. Bounded PWM is now implemented as a separate
+single-pin mode but has not been verified electrically. STOP releases a claimed GPIO using
 the ESP-IDF driver, and a periodic task releases abandoned claims. All mappings
 and counters are RAM-only and reset on device reboot.
 

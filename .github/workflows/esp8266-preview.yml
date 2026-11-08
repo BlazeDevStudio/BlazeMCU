@@ -9,6 +9,9 @@ on:
       - "main/web/**"
       - "tests/esp8266_policy_test.cpp"
       - "tests/pwm_policy_test.c"
+      - "tests/test_repository.py"
+      - "docs/ESP8266.md"
+      - "README.md"
       - ".github/workflows/esp8266-preview.yml"
   pull_request:
     paths:
@@ -17,6 +20,9 @@ on:
       - "main/web/**"
       - "tests/esp8266_policy_test.cpp"
       - "tests/pwm_policy_test.c"
+      - "tests/test_repository.py"
+      - "docs/ESP8266.md"
+      - "README.md"
       - ".github/workflows/esp8266-preview.yml"
   workflow_dispatch:
 
