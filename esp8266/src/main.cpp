@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "blaze_caps.h"
+#include "../../common/pwm_limits.h"
 #include "generated_web.h"
 
 // ESP8266-specific backend. The frontend is shared with the ESP32 target.
@@ -30,6 +31,8 @@ struct Credentials {
 static Credentials credentials = {};
 static int activePin = -1;
 static bool activeOutput = false;
+static bool activePwm = false;
+static int pwmFrequencyHz = 0, pwmDutyPercent = 0;
 static int lastLevel = 0;
 static uint32_t rising = 0, falling = 0;
 static uint32_t startAt = 0, lastSample = 0;
@@ -110,11 +113,14 @@ static bool requireAdmin() {
 }
 static void releasePin() {
   if (activePin >= 0) {
+    if (activePwm) analogWrite(activePin, 0);
     // Switch to high impedance. A LOW signal is NOT universally safe for loads.
     pinMode(activePin, INPUT);
   }
   activePin = -1;
   activeOutput = false;
+  activePwm = false;
+  pwmFrequencyHz = pwmDutyPercent = 0;
   lastLevel = 0;
 }
 static void tickLab() {
@@ -179,10 +185,12 @@ static void gpioGet() {
   StaticJsonDocument<384> doc;
   doc["status"] = activePin < 0 ? "idle" : "running";
   doc["pin"] = activePin;
-  doc["mode"] = activeOutput ? "output" : "input";
-  doc["level"] = activePin < 0 ? 0 : (activeOutput ? lastLevel : digitalRead(activePin));
+  doc["mode"] = activePwm ? "pwm" : (activeOutput ? "output" : "input");
+  doc["level"] = activePin < 0 ? 0 : (activePwm ? -1 : (activeOutput ? lastLevel : digitalRead(activePin)));
   doc["rising_edges"] = rising;
   doc["falling_edges"] = falling;
+  doc["frequency_hz"] = pwmFrequencyHz;
+  doc["duty_percent"] = pwmDutyPercent;
   const uint32_t passed = static_cast<uint32_t>(millis() - startAt);
   doc["expires_in_ms"] = activePin < 0 ? 0 : (passed >= LAB_LEASE_MS ? 0 : LAB_LEASE_MS - passed);
   sendJson(200, doc);
@@ -204,13 +212,23 @@ static void gpioPost() {
   }
   const int pin=doc["pin"].as<int>();
   const char *mode=doc["mode"];
-  if (strcmp(mode,"input")!=0 && strcmp(mode,"output")!=0) {
-    errorJson(400,"Mode must be input or output"); return;
+  if (strcmp(mode,"input")!=0 && strcmp(mode,"output")!=0 && strcmp(mode,"pwm")!=0) {
+    errorJson(400,"Mode must be input, output or pwm"); return;
   }
-  const bool output=strcmp(mode,"output")==0;
+  const bool pwm=strcmp(mode,"pwm")==0;
+  const bool output=strcmp(mode,"input")!=0;
   const int level=doc["level"] | 0;
   const bool ack=doc["ack"] | false;
   const bool pullup=doc["pullup"] | false;
+  if (pwm && (!doc["frequency_hz"].is<int>() || !doc["duty_percent"].is<int>())) {
+    errorJson(400,"PWM requires integer frequency_hz and duty_percent"); return;
+  }
+  const int frequency = pwm ? doc["frequency_hz"].as<int>() : 0;
+  const int duty = pwm ? doc["duty_percent"].as<int>() : 0;
+  const Blaze8266Pin *pinInfo=blaze8266Pin(pin);
+  if (pwm && (!blaze_pwm_valid(frequency,duty) || !pinInfo || !pinInfo->pwm)) {
+    errorJson(422,"PWM unsupported; allowed 100-1000 Hz and 0-100% on PWM-capable pins"); return;
+  }
   if (level!=0 && level!=1) {
     errorJson(400,"Output state must be HIGH or LOW"); return;
   }
@@ -226,7 +244,12 @@ static void gpioPost() {
   }
   releasePin();
   rising=falling=0;
-  if (output) {
+  if (pwm) {
+    // ESP8266 software PWM preserves Wi-Fi responsiveness at bounded frequency.
+    analogWriteRange(1023);
+    analogWriteFreq(frequency);
+    analogWrite(pin,(duty * 1023 + 50) / 100);
+  } else if (output) {
     digitalWrite(pin,level ? HIGH : LOW); // preload latch before output enable
     pinMode(pin,OUTPUT);
   } else {
@@ -234,11 +257,14 @@ static void gpioPost() {
   }
   activePin=pin;
   activeOutput=output;
-  lastLevel=output ? level : digitalRead(pin);
+  activePwm=pwm;
+  pwmFrequencyHz=pwm ? frequency : 0;
+  pwmDutyPercent=pwm ? duty : 0;
+  lastLevel=pwm ? -1 : (output ? level : digitalRead(pin));
   startAt=lastSample=millis();
   StaticJsonDocument<256> response;
   response["status"]="running";
-  response["message"]="Test active for up to 20 seconds; STOP to release the pin";
+  response["message"]=pwm ? "PWM active for up to 20 seconds; STOP releases the pin" : "Test active for up to 20 seconds; STOP to release the pin";
   sendJson(200,response);
 }
 static void gpioStop() {

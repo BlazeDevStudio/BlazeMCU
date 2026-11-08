@@ -1,6 +1,7 @@
 #include "api.h"
 #include "board_caps.h"
 #include "lab.h"
+#include "../common/pwm_limits.h"
 #include "security.h"
 #include "cJSON.h"
 #include "esp_chip_info.h"
@@ -101,11 +102,13 @@ static esp_err_t gpio_get(httpd_req_t *req) {
   cJSON *obj = cJSON_CreateObject();
   cJSON_AddStringToObject(obj, "status", st.pin < 0 ? "idle" : "running");
   cJSON_AddNumberToObject(obj, "pin", st.pin);
-  cJSON_AddStringToObject(obj, "mode", st.output ? "output" : "input");
+  cJSON_AddStringToObject(obj, "mode", st.pwm ? "pwm" : (st.output ? "output" : "input"));
   cJSON_AddNumberToObject(obj, "level", st.level);
   cJSON_AddNumberToObject(obj, "rising_edges", st.rising);
   cJSON_AddNumberToObject(obj, "falling_edges", st.falling);
   cJSON_AddNumberToObject(obj, "expires_in_ms", st.expires_in_ms);
+  cJSON_AddNumberToObject(obj, "frequency_hz", st.pwm_frequency_hz);
+  cJSON_AddNumberToObject(obj, "duty_percent", st.pwm_duty_percent);
   return json_send(req, obj, NULL);
 }
 static esp_err_t receive_small_json(httpd_req_t *req, cJSON **obj) {
@@ -132,27 +135,54 @@ static esp_err_t gpio_post(httpd_req_t *req) {
   cJSON *l = cJSON_GetObjectItemCaseSensitive(obj, "level");
   cJSON *a = cJSON_GetObjectItemCaseSensitive(obj, "ack");
   cJSON *u = cJSON_GetObjectItemCaseSensitive(obj, "pullup");
-  if (!cJSON_IsNumber(p) || !cJSON_IsString(m) ||
-      (strcmp(m->valuestring, "input") && strcmp(m->valuestring, "output")) ||
-      (l && !cJSON_IsNumber(l)) || (a && !cJSON_IsBool(a)) || (u && !cJSON_IsBool(u))) {
+  cJSON *f = cJSON_GetObjectItemCaseSensitive(obj, "frequency_hz");
+  cJSON *d = cJSON_GetObjectItemCaseSensitive(obj, "duty_percent");
+  if (!cJSON_IsNumber(p) || p->valuedouble != (double)p->valueint ||
+      !cJSON_IsString(m) ||
+      (strcmp(m->valuestring, "input") && strcmp(m->valuestring, "output") &&
+       strcmp(m->valuestring, "pwm")) ||
+      (l && (!cJSON_IsNumber(l) || l->valuedouble != (double)l->valueint)) ||
+      (a && !cJSON_IsBool(a)) || (u && !cJSON_IsBool(u))) {
     cJSON_Delete(obj);
     return error_response(req, "400 Bad Request", "Invalid pin, mode or option type");
   }
   int pin = p->valueint;
-  bool output = strcmp(m->valuestring, "output") == 0;
+  bool pwm = strcmp(m->valuestring, "pwm") == 0;
+  bool output = strcmp(m->valuestring, "input") != 0;
   int level = l ? l->valueint : 0;
   bool ack = cJSON_IsTrue(a), pullup = cJSON_IsTrue(u);
+  int frequency = 0, duty = 0;
+  if (pwm) {
+    if (!cJSON_IsNumber(f) || !cJSON_IsNumber(d) ||
+        f->valuedouble != (double)f->valueint ||
+        d->valuedouble != (double)d->valueint) {
+      cJSON_Delete(obj);
+      return error_response(req, "400 Bad Request", "PWM requires integer frequency_hz and duty_percent");
+    }
+    frequency = f->valueint;
+    duty = d->valueint;
+  }
   cJSON_Delete(obj);
+  if (pullup && (output || pin >= 34))
+    return error_response(req, "422 Unprocessable Entity", "Pull-up unsupported on this GPIO/mode");
+  if (level != 0 && level != 1)
+    return error_response(req, "422 Unprocessable Entity", "Output level must be 0 or 1");
+  if (pwm && (!blaze_pwm_valid(frequency, duty) || !blaze_pin_get(pin) ||
+              !blaze_pin_get(pin)->pwm))
+    return error_response(req, "422 Unprocessable Entity", "PWM unsupported; allowed 100-1000 Hz and 0-100% on PWM-capable pins");
   blaze_policy_t decision = blaze_lab_decide(pin, output, ack);
   if (decision == BLAZE_ACK_REQUIRED)
     return error_response(req, "409 Conflict", "Sensitive pin: acknowledge warning and proceed anyway");
   if (decision == BLAZE_DENY)
     return error_response(req, "422 Unprocessable Entity", "Unsupported operation: pin absent, flash-reserved, or input-only");
-  esp_err_t e = blaze_lab_start(pin, output, level, pullup, ack);
+  esp_err_t e = pwm ? blaze_lab_pwm_start(pin, frequency, duty, ack)
+                    : blaze_lab_start(pin, output, level, pullup, ack);
   if (e != ESP_OK) return error_response(req, "503 Service Unavailable", "GPIO driver failed; test not started");
   cJSON *out = cJSON_CreateObject();
   cJSON_AddStringToObject(out, "status", "running");
-  cJSON_AddStringToObject(out, "message", "Test active for up to 20 seconds; STOP to release the pin");
+  cJSON_AddStringToObject(out, "message",
+    pwm ? "Hardware PWM active for up to 20 seconds; STOP releases the pin" :
+          "Test active for up to 20 seconds; STOP to release the pin");
   return json_send(req, out, NULL);
 }
 static esp_err_t gpio_stop(httpd_req_t *req) {
