@@ -259,8 +259,7 @@ static void indexGet() {
   server.send_P(200, PSTR("text/html; charset=utf-8"), BLAZE_INDEX_HTML);
 }
 static void beginServer() {
-  const String headers[]={"X-Blaze-Token"};
-  server.collectHeaders(headers,1);
+  server.collectHeaders("X-Blaze-Token");
   server.on("/",HTTP_GET,indexGet);
   server.on("/api/status",HTTP_GET,statusGet);
   server.on("/api/pins",HTTP_GET,pinsGet);
