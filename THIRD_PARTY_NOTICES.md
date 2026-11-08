@@ -14,3 +14,5 @@ JuanFi, WiFi5soft or commercial firmware is included.
 Before shipping a commercial kit: review current SDK dependency/license
 reports, retain required third-party notices and determine a customer
 distribution license.
+
+ESP8266 builds fetch the open-source ESP8266 Arduino core through PlatformIO and the ArduinoJson 6 library from Benoit Blanchon (MIT). Their individual licenses and transitive dependency notices must be retained for commercial distribution. No dependency source has been copied into this repository.

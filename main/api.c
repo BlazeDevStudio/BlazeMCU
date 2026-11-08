@@ -13,8 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern const unsigned char _binary_index_html_start[] asm("_binary_index_html_start");
-extern const unsigned char _binary_index_html_end[] asm("_binary_index_html_end");
+extern const unsigned char _binary_web_index_html_start[] asm("_binary_web_index_html_start");
+extern const unsigned char _binary_web_index_html_end[] asm("_binary_web_index_html_end");
 static httpd_handle_t server;
 
 static esp_err_t json_send(httpd_req_t *req, cJSON *obj, const char *status) {
@@ -52,8 +52,8 @@ static esp_err_t index_get(httpd_req_t *req) {
   httpd_resp_set_hdr(req, "X-Content-Type-Options", "nosniff");
   httpd_resp_set_hdr(req, "Content-Security-Policy",
                      "default-src 'self'; style-src 'unsafe-inline' 'self'; script-src 'unsafe-inline' 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'");
-  return httpd_resp_send(req, (const char *)_binary_index_html_start,
-                         _binary_index_html_end - _binary_index_html_start - 1);
+  return httpd_resp_send(req, (const char *)_binary_web_index_html_start,
+                         _binary_web_index_html_end - _binary_web_index_html_start - 1);
 }
 static esp_err_t status_get(httpd_req_t *req) {
   esp_chip_info_t info;

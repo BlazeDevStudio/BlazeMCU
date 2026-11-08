@@ -8,3 +8,6 @@ dependencies.lock
 *.elf
 *.map
 .DS_Store
+
+esp8266/.pio/
+esp8266/include/generated_web.h
