@@ -89,6 +89,20 @@ Receive-only 8N1 sessions expire after 20 seconds; data stays in volatile memory
 and limited browser logs. See [UART reference](docs/UART.md). This remains
 unverified on physical serial hardware.
 
+## Release safety and preview artifact provenance
+
+Each GitHub Actions firmware build now provides a **board-specific unsigned
+manifest** recording SHA-256, byte size, chip family, image limit and explicit
+`hardware_tested=false`, `recovery_tested=false` and
+`production_approved=false`. The hash checks file integrity, **not**
+publisher identity, secure boot, signature validity or rollback success.
+Run `python3 scripts/artifact_manifest.py --help` to inspect the CLI.
+
+**Development cannot be certified complete from CI alone.** FLASH and PREBOOT
+remain intentionally disabled on both platforms. The owner must complete all
+physical, recovery, security and licensing gates in
+[release acceptance checklist](docs/RELEASE_GATE.md) before production approval.
+
 ## Quality gates
 
 ESP8266's native pin policy is exercised separately:

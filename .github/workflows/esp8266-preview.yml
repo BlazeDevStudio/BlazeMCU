@@ -13,6 +13,8 @@ on:
       - "tests/pwm_policy_test.c"
       - "tests/test_repository.py"
       - "tests/ui/**"
+      - "scripts/**"
+      - "docs/RELEASE_GATE.md"
       - "docs/ESP8266.md"
       - "README.md"
       - ".github/workflows/esp8266-preview.yml"
@@ -27,6 +29,8 @@ on:
       - "tests/pwm_policy_test.c"
       - "tests/test_repository.py"
       - "tests/ui/**"
+      - "scripts/**"
+      - "docs/RELEASE_GATE.md"
       - "docs/ESP8266.md"
       - "README.md"
       - ".github/workflows/esp8266-preview.yml"
@@ -78,10 +82,15 @@ jobs:
           print(f"{board}: {size} bytes; NOT HARDWARE VERIFIED")
           assert 0 < size < 0x100000, "Unexpected image for 4 MB reference board"
           PY
+      - name: Generate unsigned board-specific preview inventory (NOT a signature)
+        run: |
+          python scripts/artifact_manifest.py --chip esp8266 --board ${{ matrix.board }} --image esp8266/.pio/build/${{ matrix.board }}/firmware.bin --output esp8266/.pio/build/${{ matrix.board }}/firmware.manifest.json
       - name: Upload PREVIEW / UNVERIFIED image
         uses: actions/upload-artifact@v4
         with:
           name: BlazeMCU-ESP8266-${{ matrix.board }}-PREVIEW-UNVERIFIED
-          path: esp8266/.pio/build/${{ matrix.board }}/firmware.bin
+          path: |
+            esp8266/.pio/build/${{ matrix.board }}/firmware.bin
+            esp8266/.pio/build/${{ matrix.board }}/firmware.manifest.json
           if-no-files-found: error
           retention-days: 7

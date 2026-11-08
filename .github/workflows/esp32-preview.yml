@@ -11,6 +11,8 @@ on:
       - "sdkconfig.defaults"
       - "partitions.csv"
       - "tests/**"
+      - "scripts/**"
+      - "docs/RELEASE_GATE.md"
       - ".github/workflows/esp32-preview.yml"
   workflow_dispatch:
 
@@ -62,12 +64,17 @@ jobs:
           print(f"Image size: {size} / {limit} bytes")
           assert size <= limit, "Application exceeds intended OTA slot"
           PY
+      - name: Generate unsigned board-specific preview inventory (NOT a signature)
+        shell: bash
+        run: |
+          python3 scripts/artifact_manifest.py --chip esp32 --board esp32-wroom-32-devkit --image build/blazemcu_esp_starter.bin --output build/blazemcu_esp_starter.manifest.json
       - name: Upload explicitly unverified firmware build
         uses: actions/upload-artifact@v4
         with:
           name: BlazeMCU-ESP32-PREVIEW-UNVERIFIED
           path: |
             build/blazemcu_esp_starter.bin
+            build/blazemcu_esp_starter.manifest.json
             build/bootloader/bootloader.bin
             build/partition_table/partition-table.bin
           if-no-files-found: error

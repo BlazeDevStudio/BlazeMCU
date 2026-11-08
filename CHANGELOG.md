@@ -8,6 +8,7 @@
 - GPIO/I²C/OLED commands cannot overlap with UART capture. ESP32 uses a watchdog and mutex to expire sessions even without browser polling.
 - Host pin/baud regression, end-to-end mock browser checks, documentation.
 - Hardware confirmation, reboot/flash safety, slideshow and manufacturing readiness remain outstanding.
+- Per-board unsigned SHA-256/size inventory added to firmware artifacts, with explicit NO-GO flags for hardware, recovery and production.
 
 ## 0.5.0-preview (OLED diagnostic driver, no release)
 
