@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#202b34">
+  <meta name="color-scheme" content="light">
+  <title>BlazeMCU — Device laboratory</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="mast-inner">
+      <div class="identity">
+        <div class="mark" aria-hidden="true">B<span>/</span>M</div>
+        <div><div class="product">BlazeMCU</div><div class="subtitle">ESP starter · Hardware laboratory</div></div>
+      </div>
+      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.6.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="workspace-head">
+      <div><p class="overline">LOCAL DEVICE WORKSPACE</p><h1 id="pageTitle">Overview</h1></div>
+      <div class="connection" id="connectionState" role="status">Connecting to 192.168.4.1</div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Device workspace">
+      <button id="tab-dashboard" role="tab" aria-selected="true" aria-controls="dashboard" data-tab="dashboard">Overview</button>
+      <button id="tab-gpio" role="tab" aria-selected="false" aria-controls="gpio" data-tab="gpio">GPIO lab</button>
+      <button id="tab-pins" role="tab" aria-selected="false" aria-controls="pins" data-tab="pins">Pin reference</button>
+      <button id="tab-loader" role="tab" aria-selected="false" aria-controls="loader" data-tab="loader">Firmware</button>
+      <button id="tab-displays" role="tab" aria-selected="false" aria-controls="displays" data-tab="displays">Displays</button>
+      <button id="tab-serial" role="tab" aria-selected="false" aria-controls="serial" data-tab="serial">Serial</button>
+      <button id="tab-help" role="tab" aria-selected="false" aria-controls="help" data-tab="help">Help</button>
+    </nav>
+
+    <section id="dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="two-up">
+        <article class="panel">
+          <div class="panel-head"><h2>Device information</h2><span class="small-cap">Live · read only</span></div>
+          <dl class="facts">
+            <div><dt>Board profile</dt><dd id="deviceBoard">—</dd></div>
+            <div><dt>Firmware</dt><dd id="deviceVersion">—</dd></div>
+            <div><dt>Free heap</dt><dd id="deviceHeap">—</dd></div>
+            <div><dt>Flash capacity</dt><dd id="deviceFlash">—</dd></div>
+            <div><dt>Local portal</dt><dd>192.168.4.1</dd></div>
+            <div><dt>Firmware loader</dt><dd>Not enabled</dd></div>
+          </dl>
+          <button class="quiet" id="refreshDevice" type="button">Refresh device status</button>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h2>Administrative access</h2><span class="small-cap">Protected operations</span></div>
+          <p>The device prints its individual admin token to the provisioning serial console. Verify it here before operating GPIO.</p>
+          <label for="token">Device admin token</label>
+          <input type="password" id="token" autocomplete="off" spellcheck="false" placeholder="32-character token" maxlength="64">
+          <div class="actions">
+            <button class="primary" id="tokenApply" type="button">Verify token</button>
+            <button class="quiet" id="tokenClear" type="button">Clear access</button>
+          </div>
+          <p class="feedback" id="authstate" role="status">Not authenticated</p>
+          <p class="fine-print">Token is held in this page's memory only. HTTP access is restricted to the board's local Wi-Fi network; this is not a production-grade account system.</p>
+        </article>
+      </div>
+      <div class="safety-strip"><strong>Preview firmware.</strong> The GPIO lab is operational in source, but electrical behavior and recovery have not been certified on physical boards. Disconnect motors, relays and high-current loads.</div>
+    </section>
+
+    <section id="gpio" role="tabpanel" aria-labelledby="tab-gpio" hidden>
+      <div class="lab-layout">
+        <article class="panel">
+          <div class="panel-head"><h2>Configure experiment</h2><span class="small-cap">One pin · 20 seconds</span></div>
+          <p class="section-note">Every documented pin is selectable. Hardware limits remain enforced, even after you acknowledge a warning.</p>
+          <div class="field-row">
+            <div class="field"><label for="pin">Target pin</label><select id="pin"><option>Loading pins…</option></select></div>
+            <div class="field"><label for="mode">Operation</label>
+              <select id="mode"><option value="input">Monitor input</option><option value="output">Set output HIGH / LOW</option><option value="pwm">PWM · pulses / dimming</option></select>
+            </div>
+          </div>
+          <div class="pin-detail">
+            <div class="pin-detail-top"><strong id="pinLabel">Pin reference loading…</strong><span id="pinCategory">—</span></div>
+            <p id="pinCapabilities">—</p>
+            <p id="pinWarning">—</p>
+          </div>
+          <div class="field" id="outputControls"><label for="level">Digital output state</label>
+            <select id="level"><option value="0">LOW · 0</option><option value="1">HIGH · 1</option></select>
+          </div>
+          <div class="field" id="inputControls"><label class="check-line"><input type="checkbox" id="pullup"> Enable internal pull-up (if supported)</label></div>
+          <div class="pwm-settings" id="pwmControls" hidden>
+            <label for="frequency">Frequency <output id="frequencyValue">500 Hz</output></label>
+            <input type="range" id="frequency" min="100" max="1000" step="50" value="500">
+            <label for="duty">Duty cycle <output id="dutyValue">50%</output></label>
+            <input type="range" id="duty" min="0" max="100" step="1" value="50">
+            <p class="calculation" id="pwmEstimate">Estimated period: 2.00 ms · HIGH: 1.00 ms</p>
+          </div>
+          <label class="acknowledge" id="ackWrap"><input type="checkbox" id="ack"><span>I understand this pin's restrictions and want to proceed where electrically supported.</span></label>
+          <div class="actions action-tray">
+            <button class="primary" type="button" id="start">Start / apply</button>
+            <button class="danger" type="button" id="stop">STOP / release pin</button>
+          </div>
+          <p class="feedback" role="status" id="gpioMessage">Ready. Verify admin access from Overview to start.</p>
+        </article>
+        <article class="panel readout">
+          <div class="panel-head"><h2>Live readout</h2><span id="runState" class="state">Idle</span></div>
+          <div class="level-block"><span class="small-cap">DIGITAL LEVEL</span><strong id="liveLevel">—</strong><span id="livePin">No active pin</span></div>
+          <div class="metric-grid">
+            <div><span>Rising edges</span><strong id="rising">0</strong></div>
+            <div><span>Falling edges</span><strong id="falling">0</strong></div>
+            <div><span>Lease remaining</span><strong id="remaining">—</strong></div>
+            <div><span>Running mode</span><strong id="runningMode">—</strong></div>
+          </div>
+          <div class="lease-track" aria-hidden="true"><div class="lease-fill" id="leaseFill"></div></div>
+          <p class="fine-print" id="pwmRunning">The output readout reports commanded values, not measured electrical waveforms. Sampled input edges may be missed at high frequency.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="pins" role="tabpanel" aria-labelledby="tab-pins" hidden>
+      <article class="panel">
+        <div class="panel-head"><h2>Board pin reference</h2><span id="pinCount" class="small-cap">Loading…</span></div>
+        <p>All documented pins remain visible by default, including absent, flash-connected, analog-only and boot-sensitive pins. The selected hardware profile is a reference, not proof of physical PCB exposure.</p>
+        <div class="search-row"><label for="pinSearch">Find GPIO, alias or capability</label><input type="search" id="pinSearch" placeholder="Example: GPIO34, D1, strap, flash" autocomplete="off"></div>
+        <div class="pin-list" id="pinRows" aria-live="polite"></div>
+      </article>
+    </section>
+
+    <section id="loader" role="tabpanel" aria-labelledby="tab-loader" hidden>
+      <article class="panel narrow">
+        <div class="panel-head"><h2>Firmware loader</h2><span class="state">Not available</span></div>
+        <p>FLASH and one-time PREBOOT are blocked until image validation, boot selection and physical recovery are verified independently on each chip family.</p>
+        <div class="safety-strip">No binary uploaded through this page can overwrite the board. A compiled <code>.bin</code> must match the exact chip, flash layout and application partition.</div>
+        <label for="firmwareFile">Application binary (.bin only)</label>
+        <input type="file" id="firmwareFile" accept=".bin,application/octet-stream" disabled>
+        <div class="actions"><button disabled type="button">PREBOOT · unavailable</button><button disabled type="button">FLASH · unavailable</button></div>
+        <p class="fine-print">Source .ino files cannot be flashed as compiled application images. See the Help tab for compilation options.</p>
+      </article>
+    </section>
+
+    <section id="displays" role="tabpanel" aria-labelledby="tab-displays" hidden>
+      <article class="panel narrow">
+        <div class="panel-head"><h2>I²C bus discovery</h2><span class="state">Address probe only</span></div>
+        <p>Scan for seven-bit responding addresses (0x08–0x77) at 100 kHz. This does not identify or initialize an OLED, LCD or sensor controller. Connect external SDA/SCL pull-ups to 3.3 V; a powered module may already include them.</p>
+        <div class="field-row">
+          <div class="field"><label for="i2cSda">SDA pin</label><select id="i2cSda"><option>Loading pins…</option></select></div>
+          <div class="field"><label for="i2cScl">SCL pin</label><select id="i2cScl"><option>Loading pins…</option></select></div>
+        </div>
+        <div class="pin-detail">
+          <div class="pin-detail-top"><strong>Wiring limitations</strong><span>3.3 V ONLY</span></div>
+          <p id="i2cWarnings">Select the actual pins connected to your module.</p>
+        </div>
+        <label class="acknowledge"><input type="checkbox" id="i2cAck"><span>I have verified wiring and understand that boot, UART, flash and unavailable pins have restrictions. Acknowledgment cannot override unsafe operations.</span></label>
+        <div class="actions"><button id="i2cScan" class="primary" type="button">Scan I²C addresses</button></div>
+        <p class="feedback" id="i2cMessage" role="status">Idle · GPIO lab must be stopped before scanning.</p>
+        <div id="i2cResults" class="address-results" aria-live="polite"></div>
+        <p class="fine-print">A response only means that a device acknowledged its address. Empty results do not prove that no device is connected; power, pull-ups, wiring and controller configuration matter.</p>
+      </article>
+      <article class="panel narrow companion">
+        <div class="panel-head"><h2>OLED 128×64 pattern test</h2><span class="state">Explicit model · 3.3 V</span></div>
+        <p>Limited, opt-in display initialization and diagnostics for SSD1306 or SH1106 I²C OLED modules. The I²C scan above does <strong>not</strong> identify the controller. Confirm the actual module model and wiring before sending commands.</p>
+        <div class="field-row">
+          <div class="field"><label for="oledModel">Controller (from module datasheet)</label>
+            <select id="oledModel"><option value="ssd1306">SSD1306 · 128×64</option><option value="sh1106">SH1106 · 128×64</option></select></div>
+          <div class="field"><label for="oledAddress">I²C target address</label>
+            <select id="oledAddress"><option value="60">0x3C</option><option value="61">0x3D</option></select></div>
+        </div>
+        <label for="oledPattern">Diagnostic pattern</label>
+        <select id="oledPattern"><option value="checker">Checker blocks</option><option value="border">Border and center guide</option><option value="blank">Blank display RAM</option></select>
+        <label class="acknowledge"><input type="checkbox" id="oledConfirm"><span>I verified my device is the selected 128×64 OLED controller at this I²C address, with correct 3.3 V wiring. This operation will overwrite its display RAM.</span></label>
+        <div class="actions"><button id="oledRun" class="primary" type="button">Send OLED test pattern</button></div>
+        <p class="feedback" id="oledMessage" role="status">No test sent. Use the SDA/SCL pair and wiring acknowledgment selected above.</p>
+        <p class="fine-print">The image stays on the display until you send the Blank pattern, refresh it from another controller, or power-cycle. No automatic display clearing or slideshow is provided.</p>
+      </article>
+      <article class="panel narrow companion">
+        <div class="panel-head"><h2>Other display tools</h2><span class="state">Not implemented</span></div>
+        <p>HD44780 I²C backpack, SPI ST7735/ST7789/ILI9341, graphics slideshow, automatic identification and generic sensor control are still unavailable. They require separate drivers and bench testing.</p>
+      </article>
+    </section>
+
+    <section id="serial" role="tabpanel" aria-labelledby="tab-serial" hidden>
+      <article class="panel narrow">
+        <div class="panel-head"><h2>UART receive monitor</h2><span class="state">Receive only · 20 seconds</span></div>
+        <p>Monitor external 3.3 V TTL serial at 1200–9600 baud, 8N1. TX is deliberately unavailable; no bytes are transmitted or stored on the device. Monitoring ends automatically after 20 seconds.</p>
+        <div class="field-row">
+          <div class="field"><label for="uartPin">External RX input GPIO</label><select id="uartPin"><option>Loading pins…</option></select></div>
+          <div class="field"><label for="uartBaud">Baud rate · 8N1</label>
+            <select id="uartBaud"><option value="9600">9600</option><option value="4800">4800</option><option value="2400">2400</option><option value="1200">1200</option></select></div>
+        </div>
+        <div class="pin-detail"><p id="uartWarning">The board's UART0 console GPIO1/3 cannot be selected for receiving. Connect ground and verified 3.3 V TTL signals only.</p></div>
+        <label class="acknowledge"><input id="uartAck" type="checkbox"><span>I understand the selected GPIO's electrical and boot restrictions. Acknowledgment does not permit boot-console or flash pins.</span></label>
+        <div class="actions"><button type="button" class="primary" id="uartStart">Begin RX session</button><button type="button" class="danger" id="uartStop">STOP RX</button><button type="button" class="quiet" id="uartClear">Clear log</button></div>
+        <p class="feedback" id="uartMessage" role="status">Idle · Verify admin access before starting an RX-only session.</p>
+        <div class="metric-grid"><div><span>Monitor state</span><strong id="uartState">Idle</strong></div><div><span>Remaining</span><strong id="uartRemaining">—</strong></div></div>
+        <label for="uartText">Received ASCII (binary bytes replaced by dots)</label>
+        <pre class="serial-output" id="uartText" aria-live="off">No captured data.</pre>
+        <label for="uartHex">Raw RX hexadecimal</label>
+        <pre class="serial-output serial-hex" id="uartHex" aria-live="off">—</pre>
+        <div class="safety-strip">3.3 V TTL only. Do not connect RS-232 or 5 V serial directly. The console pins, GPIO16 on ESP8266 and flash-connected pins are not monitored. The capture is limited and may miss bytes under Wi-Fi load.</div>
+      </article>
+    </section>
+
+    <section id="help" role="tabpanel" aria-labelledby="tab-help" hidden>
+      <article class="panel narrow"><div class="panel-head"><h2>Prepare compatible firmware</h2><span class="small-cap">Reference instructions</span></div>
+        <p><strong>Arduino IDE:</strong> Select the correct ESP board, flash size and build options, then use Sketch → Export Compiled Binary.</p>
+        <p><strong>Arduino CLI:</strong> Install the matching core and use <code>arduino-cli compile --fqbn &lt;board&gt; --export-binaries sketch/</code>.</p>
+        <p><strong>PlatformIO:</strong> Build the environment matching the board. The app binary is typically found under <code>.pio/build/&lt;env&gt;/firmware.bin</code>.</p>
+        <p><strong>ESP-IDF (ESP32):</strong> Run <code>idf.py set-target esp32</code> and <code>idf.py build</code>. App images are not merged flash images. ESP8266 uses a different build and boot process.</p>
+        <h3>Safety & recovery</h3>
+        <p>ROM serial download mode may allow re-flashing a damaged board (typically GPIO0 LOW during reset); the USB interface, power and flash offsets are board-specific. A factory partition does not guarantee automatic fallback.</p>
+        <p>Never treat a matching filename, I²C address, or GPIO capability as a guarantee of hardware compatibility. Consult the board manufacturer's pinout before connecting loads.</p>
+      </article>
+    </section>
+    <footer>BlazeDevStudio · Offline device tools <span>Build 0.6.0-preview · No cloud services required</span></footer>
+  </main>
+</body>
+</html>

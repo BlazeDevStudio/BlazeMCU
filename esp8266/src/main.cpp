@@ -1,0 +1,616 @@
+#include <Arduino.h>
+#include <ArduinoJson.h>
+#include <EEPROM.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
+#include "../../common/uart_limits.h"
+#include <stddef.h>
+#include <string.h>
+#include "blaze_caps.h"
+#include "../../common/pwm_limits.h"
+#include "../../common/oled_pattern.h"
+#include "generated_web.h"
+
+// ESP8266-specific backend. The frontend is shared with the ESP32 target.
+// No firmware flashing, OTA updater, display driving or UART takeover exists here.
+#if defined(BLAZE_D1_MINI)
+static constexpr const char *BOARD = "esp8266-d1-mini-reference";
+#else
+static constexpr const char *BOARD = "esp8266-nodemcu-esp12e-reference";
+#endif
+static constexpr uint32_t LAB_LEASE_MS = 20000;
+static constexpr size_t EEPROM_BYTES = 128;
+static constexpr uint32_t CREDS_MAGIC = 0xB1A2E826;
+static ESP8266WebServer server(80);
+
+struct Credentials {
+  uint32_t marker;
+  uint8_t version;
+  char ap[21];
+  char token[33];
+  uint32_t checksum;
+};
+static Credentials credentials = {};
+static int activePin = -1;
+static bool activeOutput = false;
+static bool activePwm = false;
+static int pwmFrequencyHz = 0, pwmDutyPercent = 0;
+static int lastLevel = 0;
+static uint32_t rising = 0, falling = 0;
+static uint32_t startAt = 0, lastSample = 0;
+static bool initialized = false;
+static SoftwareSerial uartReader;
+static int uartPin = -1;
+static int uartBaud = 0;
+static uint32_t uartStarted = 0;
+static void uartStop() {
+  if (uartPin < 0) return;
+  const int pin = uartPin;
+  uartReader.end();
+  uartPin = -1;
+  uartBaud = 0;
+  uartStarted = 0;
+  pinMode(pin,INPUT); // Only our selected RX pin; no TX or UART0 console use
+}
+static void uartTick() {
+  if (uartPin >= 0 && static_cast<uint32_t>(millis()-uartStarted) >= BLAZE_UART_LEASE_MS)
+    uartStop();
+}
+
+static uint32_t credentialChecksum(const Credentials &c) {
+  // FNV-1a is a corruption check, not authentication or key derivation.
+  uint32_t hash = 2166136261UL;
+  const uint8_t *ptr = reinterpret_cast<const uint8_t *>(&c);
+  for (size_t i = 0; i < offsetof(Credentials, checksum); i++) {
+    hash ^= ptr[i]; hash *= 16777619UL;
+  }
+  return hash;
+}
+static void fillSecret(char *out, size_t chars) {
+  constexpr char alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  // ESP.random() has a hardware entropy source when Wi-Fi is active.
+  for (size_t i = 0; i < chars; i++) {
+    const uint32_t r = ESP.random();
+    out[i] = alphabet[r % (sizeof(alphabet) - 1)];
+  }
+  out[chars] = '\0';
+}
+static bool provisionDevice() {
+  EEPROM.begin(EEPROM_BYTES);
+  EEPROM.get(0, credentials);
+  const bool valid = credentials.marker == CREDS_MAGIC &&
+    credentials.version == 1 &&
+    credentials.ap[20] == '\0' && credentials.token[32] == '\0' &&
+    credentials.checksum == credentialChecksum(credentials);
+  if (!valid) {
+    memset(&credentials, 0, sizeof(credentials));
+    credentials.marker = CREDS_MAGIC;
+    credentials.version = 1;
+    fillSecret(credentials.ap, 20);
+    fillSecret(credentials.token, 32);
+    credentials.checksum = credentialChecksum(credentials);
+    EEPROM.put(0, credentials);
+    if (!EEPROM.commit()) {
+      EEPROM.end();
+      memset(&credentials, 0, sizeof(credentials));
+      return false; // Never expose an AP with unpersisted/unknown credentials.
+    }
+  }
+  EEPROM.end();
+  return true;
+}
+static bool authenticated() {
+  String candidate = server.header("X-Blaze-Token");
+  uint8_t diff = static_cast<uint8_t>(candidate.length() ^ 32U);
+  for (unsigned i=0; i<32; ++i) {
+    const char ch = i < candidate.length() ? candidate[i] : '\0';
+    diff |= static_cast<uint8_t>(ch ^ credentials.token[i]);
+  }
+  return diff == 0;
+}
+static void commonHeaders() {
+  server.sendHeader("Cache-Control","no-store");
+  server.sendHeader("X-Content-Type-Options","nosniff");
+}
+template <typename Doc>
+static void sendJson(int status, const Doc &doc) {
+  String payload;
+  serializeJson(doc, payload);
+  commonHeaders();
+  server.send(status, "application/json; charset=utf-8", payload);
+}
+static void errorJson(int status, const char *message) {
+  StaticJsonDocument<256> doc;
+  doc["status"]="error";
+  doc["message"]=message;
+  sendJson(status, doc);
+}
+static bool requireAdmin() {
+  if (authenticated()) return true;
+  errorJson(401,"Admin token required. Read it from the device serial console.");
+  return false;
+}
+static void releasePin() {
+  if (activePin >= 0) {
+    if (activePwm) analogWrite(activePin, 0);
+    // Switch to high impedance. A LOW signal is NOT universally safe for loads.
+    pinMode(activePin, INPUT);
+  }
+  activePin = -1;
+  activeOutput = false;
+  activePwm = false;
+  pwmFrequencyHz = pwmDutyPercent = 0;
+  lastLevel = 0;
+}
+static void tickLab() {
+  if (activePin < 0) return;
+  uint32_t now = millis();
+  if (static_cast<uint32_t>(now - startAt) >= LAB_LEASE_MS) {
+    releasePin();
+    return;
+  }
+  if (!activeOutput && static_cast<uint32_t>(now - lastSample) >= 20) {
+    const int value = digitalRead(activePin);
+    if (value != lastLevel) {
+      if (value == HIGH) ++rising; else ++falling;
+      lastLevel = value;
+    }
+    lastSample = now;
+  }
+}
+static void statusGet() {
+  StaticJsonDocument<512> doc;
+  doc["product"]="BlazeMCU ESP Starter";
+  doc["version"]="0.6.0-preview-esp8266";
+  doc["board"]=BOARD;
+  doc["cores"]=1;
+  doc["heap_free"]=ESP.getFreeHeap();
+  doc["flash_bytes"]=ESP.getFlashChipRealSize();
+  doc["portal"]="192.168.4.1";
+  doc["gpio_mode"]="session_only_20s";
+  doc["loader"]="disabled_pending_recovery_validation";
+  sendJson(200, doc);
+}
+static void pinsGet() {
+  commonHeaders();
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json; charset=utf-8", "");
+  server.sendContent(String("{\"board\":\"") + BOARD + "\",\"pins\":[");
+  for (size_t i = 0; i < BLAZE8266_PIN_COUNT; i++) {
+    const Blaze8266Pin &p = BLAZE8266_PINS[i];
+    StaticJsonDocument<768> doc;
+    doc["number"]=p.number;
+    doc["label"]=p.label;
+    doc["exposed"]=p.exposed;
+    doc["input"]=p.input;
+    doc["output"]=p.output;
+    doc["adc"]=p.adc;
+    doc["pwm"]=p.pwm;
+    doc["strap"]=p.strap;
+    doc["reserved"]=p.reserved;
+    doc["category"]=p.category;
+    doc["warning"]=p.warning;
+    String part;
+    serializeJson(doc, part);
+    if (i) server.sendContent(",");
+    server.sendContent(part);
+    yield();
+  }
+  server.sendContent("]}");
+  server.sendContent("");
+}
+static void gpioGet() {
+  tickLab();
+  StaticJsonDocument<384> doc;
+  doc["status"] = activePin < 0 ? "idle" : "running";
+  doc["pin"] = activePin;
+  doc["mode"] = activePwm ? "pwm" : (activeOutput ? "output" : "input");
+  doc["level"] = activePin < 0 ? 0 : (activePwm ? -1 : (activeOutput ? lastLevel : digitalRead(activePin)));
+  doc["rising_edges"] = rising;
+  doc["falling_edges"] = falling;
+  doc["frequency_hz"] = pwmFrequencyHz;
+  doc["duty_percent"] = pwmDutyPercent;
+  const uint32_t passed = static_cast<uint32_t>(millis() - startAt);
+  doc["expires_in_ms"] = activePin < 0 ? 0 : (passed >= LAB_LEASE_MS ? 0 : LAB_LEASE_MS - passed);
+  sendJson(200, doc);
+}
+static void gpioPost() {
+  if (!requireAdmin()) return;
+  String raw=server.arg("plain");
+  if (raw.length()==0 || raw.length()>256) {
+    errorJson(413,"A JSON body of at most 256 bytes is required");
+    return;
+  }
+  StaticJsonDocument<320> doc;
+  if (deserializeJson(doc, raw) || !doc["pin"].is<int>() ||
+      !doc["mode"].is<const char*>() ||
+      (doc.containsKey("level") && !doc["level"].is<int>()) ||
+      (doc.containsKey("ack") && !doc["ack"].is<bool>()) ||
+      (doc.containsKey("pullup") && !doc["pullup"].is<bool>())) {
+    errorJson(400,"Malformed or invalid GPIO request"); return;
+  }
+  const int pin=doc["pin"].as<int>();
+  const char *mode=doc["mode"];
+  if (strcmp(mode,"input")!=0 && strcmp(mode,"output")!=0 && strcmp(mode,"pwm")!=0) {
+    errorJson(400,"Mode must be input, output or pwm"); return;
+  }
+  const bool pwm=strcmp(mode,"pwm")==0;
+  const bool output=strcmp(mode,"input")!=0;
+  const int level=doc["level"] | 0;
+  const bool ack=doc["ack"] | false;
+  const bool pullup=doc["pullup"] | false;
+  if (pwm && (!doc["frequency_hz"].is<int>() || !doc["duty_percent"].is<int>())) {
+    errorJson(400,"PWM requires integer frequency_hz and duty_percent"); return;
+  }
+  const int frequency = pwm ? doc["frequency_hz"].as<int>() : 0;
+  const int duty = pwm ? doc["duty_percent"].as<int>() : 0;
+  const Blaze8266Pin *pinInfo=blaze8266Pin(pin);
+  if (pwm && (!blaze_pwm_valid(frequency,duty) || !pinInfo || !pinInfo->pwm)) {
+    errorJson(422,"PWM unsupported; allowed 100-1000 Hz and 0-100% on PWM-capable pins"); return;
+  }
+  if (level!=0 && level!=1) {
+    errorJson(400,"Output state must be HIGH or LOW"); return;
+  }
+  if (pullup && (output || pin==16)) {
+    errorJson(422,"Internal pull-up unsupported for requested GPIO/mode"); return;
+  }
+  const Blaze8266Decision decision=blaze8266Policy(pin,output,ack);
+  if (decision==BLAZE8266_ACK_REQUIRED) {
+    errorJson(409,"Sensitive pin: acknowledge the warning before testing"); return;
+  }
+  if (decision==BLAZE8266_DENY) {
+    errorJson(422,"Unsupported digital operation: flash, absent, analog-only or input-only pin"); return;
+  }
+  uartTick();
+  if (uartPin >= 0) {
+    errorJson(409,"Stop the UART receiver before starting a GPIO experiment"); return;
+  }
+  releasePin();
+  rising=falling=0;
+  if (pwm) {
+    // ESP8266 software PWM preserves Wi-Fi responsiveness at bounded frequency.
+    analogWriteRange(1023);
+    analogWriteFreq(frequency);
+    analogWrite(pin,(duty * 1023 + 50) / 100);
+  } else if (output) {
+    digitalWrite(pin,level ? HIGH : LOW); // preload latch before output enable
+    pinMode(pin,OUTPUT);
+  } else {
+    pinMode(pin,pullup ? INPUT_PULLUP : INPUT);
+  }
+  activePin=pin;
+  activeOutput=output;
+  activePwm=pwm;
+  pwmFrequencyHz=pwm ? frequency : 0;
+  pwmDutyPercent=pwm ? duty : 0;
+  lastLevel=pwm ? -1 : (output ? level : digitalRead(pin));
+  startAt=lastSample=millis();
+  StaticJsonDocument<256> response;
+  response["status"]="running";
+  response["message"]=pwm ? "PWM active for up to 20 seconds; STOP releases the pin" : "Test active for up to 20 seconds; STOP to release the pin";
+  sendJson(200,response);
+}
+static void gpioStop() {
+  if (!requireAdmin()) return;
+  releasePin();
+  StaticJsonDocument<128> doc;
+  doc["status"]="idle";
+  sendJson(200,doc);
+}
+static void i2cScanPost() {
+  if (!requireAdmin()) return;
+  String raw = server.arg("plain");
+  if (!raw.length() || raw.length() > 256) {
+    errorJson(413, "I2C request must be JSON up to 256 bytes"); return;
+  }
+  StaticJsonDocument<256> request;
+  if (deserializeJson(request, raw) ||
+      !request["sda"].is<int>() || !request["scl"].is<int>() ||
+      (request.containsKey("ack") && !request["ack"].is<bool>())) {
+    errorJson(400, "SDA/SCL must be GPIO integers, ack a boolean"); return;
+  }
+  const int sda = request["sda"].as<int>();
+  const int scl = request["scl"].as<int>();
+  const bool acknowledged = request["ack"] | false;
+  const Blaze8266Decision permission = blaze8266I2cPolicy(sda, scl, acknowledged);
+  if (permission == BLAZE8266_ACK_REQUIRED) {
+    errorJson(409, "Sensitive SDA/SCL: acknowledge pin warnings first"); return;
+  }
+  if (permission != BLAZE8266_ALLOW) {
+    errorJson(422, "Unsupported or identical I2C pins (GPIO16 unavailable for I2C)"); return;
+  }
+  tickLab();
+  uartTick();
+  if (activePin >= 0 || uartPin >= 0) {
+    errorJson(409, "Stop the active GPIO/UART experiment before scanning I2C"); return;
+  }
+  // Temporarily claim SDA/SCL. Never write a sensor/display register.
+  Wire.begin(sda, scl);
+  Wire.setClock(100000);
+  Wire.setClockStretchLimit(5000); // microseconds; bus still needs external 3.3V pull-ups
+  uint8_t addresses[112] = {};
+  size_t count = 0;
+  const uint32_t begun = millis();
+  bool fault = false;
+  for (uint8_t address = 0x08; address <= 0x77; ++address) {
+    if (static_cast<uint32_t>(millis() - begun) >= 1500) {
+      fault = true; break;
+    }
+    Wire.beginTransmission(address);
+    const uint8_t result = Wire.endTransmission(true);
+    if (result == 0) addresses[count++] = address;
+    else if (result != 2) { fault = true; break; }
+    yield();
+  }
+  // Pinned ESP8266 TwoWire has no end() method. No persistent scan state.
+  pinMode(sda, INPUT);
+  pinMode(scl, INPUT);
+  if (fault) {
+    errorJson(503, "I2C probe failed or timed out. Check 3.3V pull-ups and wiring."); return;
+  }
+  StaticJsonDocument<192> summary;
+  summary["status"] = "completed";
+  summary["note"] = "Address ACK only; device/controller type not identified";
+  summary["sda"] = sda;
+  summary["scl"] = scl;
+  // Use chunked JSON output to avoid unbounded RAM allocation.
+  commonHeaders();
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, "application/json; charset=utf-8", "");
+  String opening;
+  serializeJson(summary, opening);
+  opening.remove(opening.length() - 1); // append bounded array to object
+  server.sendContent(opening + ",\"addresses\":[");
+  for (size_t i=0; i<count; ++i) {
+    if (i) server.sendContent(",");
+    server.sendContent(String(addresses[i]));
+  }
+  server.sendContent("]}");
+  server.sendContent("");
+}
+static bool oledWriteBlock(uint8_t address, const uint8_t *data, size_t length) {
+  Wire.beginTransmission(address);
+  if (Wire.write(data,length) != length) {
+    Wire.endTransmission(true);
+    return false;
+  }
+  return Wire.endTransmission(true) == 0;
+}
+
+/* Opt-in OLED diagnostics: a responding address does NOT identify controller. */
+static void oledTestPost() {
+  if (!requireAdmin()) return;
+  String raw = server.arg("plain");
+  if (!raw.length() || raw.length() > 256) {
+    errorJson(413, "OLED request must be JSON up to 256 bytes"); return;
+  }
+  StaticJsonDocument<384> obj;
+  if (deserializeJson(obj,raw) || !obj["sda"].is<int>() ||
+      !obj["scl"].is<int>() || !obj["address"].is<int>() ||
+      !obj["controller"].is<const char*>() ||
+      !obj["pattern"].is<const char*>() ||
+      (obj.containsKey("ack") && !obj["ack"].is<bool>()) ||
+      !obj["confirm"].is<bool>()) {
+    errorJson(400, "Invalid OLED pins, controller, address or confirmation"); return;
+  }
+  const int sda = obj["sda"].as<int>();
+  const int scl = obj["scl"].as<int>();
+  const int addr = obj["address"].as<int>();
+  const char *model = obj["controller"];
+  const char *mode = obj["pattern"];
+  const int controller = strcmp(model, "ssd1306") == 0 ? BLAZE_OLED_SSD1306 :
+                         strcmp(model, "sh1106") == 0 ? BLAZE_OLED_SH1106 : -1;
+  const int pattern = strcmp(mode, "checker") == 0 ? BLAZE_OLED_CHECKER :
+                      strcmp(mode, "border") == 0 ? BLAZE_OLED_BORDER :
+                      strcmp(mode, "blank") == 0 ? BLAZE_OLED_BLANK : -1;
+  if (!blaze_oled_allowed(addr,controller,pattern)) {
+    errorJson(422,"Only explicitly selected SSD1306/SH1106 128x64 at 0x3C/0x3D supported"); return;
+  }
+  if (!obj["confirm"].as<bool>()) {
+    errorJson(409,"Confirm model and wiring before changing OLED display RAM"); return;
+  }
+  const bool acknowledged = obj["ack"] | false;
+  const Blaze8266Decision permission = blaze8266I2cPolicy(sda,scl,acknowledged);
+  if (permission == BLAZE8266_ACK_REQUIRED) {
+    errorJson(409,"Acknowledge sensitive SDA/SCL pin warnings"); return;
+  }
+  if (permission != BLAZE8266_ALLOW) {
+    errorJson(422,"Unsupported OLED SDA/SCL pin pairing"); return;
+  }
+  tickLab();
+  uartTick();
+  if (activePin >= 0 || uartPin >= 0) {
+    errorJson(409,"STOP active GPIO/UART experiment before OLED test"); return;
+  }
+  Wire.begin(sda,scl);
+  Wire.setClock(100000);
+  Wire.setClockStretchLimit(5000);
+  Wire.beginTransmission((uint8_t)addr);
+  bool ok = Wire.endTransmission(true) == 0;
+  const uint32_t begun = millis();
+  size_t length = 0;
+  const uint8_t *commands = blaze_oled_init_commands(controller,&length);
+  if (ok) ok = oledWriteBlock((uint8_t)addr,commands,length);
+  for (unsigned page = 0; page < BLAZE_OLED_PAGES && ok; ++page) {
+    uint8_t cmds[4];
+    blaze_oled_page_commands(controller,page,cmds);
+    ok = oledWriteBlock((uint8_t)addr,cmds,sizeof(cmds));
+    for (unsigned column=0; column < BLAZE_OLED_WIDTH && ok;
+         column += BLAZE_OLED_CHUNK) {
+      if (static_cast<uint32_t>(millis()-begun) > 2000) { ok = false; break; }
+      uint8_t data[BLAZE_OLED_CHUNK+1];
+      blaze_oled_data_chunk(pattern,page,column,data);
+      ok = oledWriteBlock((uint8_t)addr,data,sizeof(data));
+      yield();
+    }
+  }
+  // Pinned core does not have Wire.end(). Return the lines to GPIO input.
+  pinMode(sda,INPUT);
+  pinMode(scl,INPUT);
+  if (!ok) {
+    errorJson(503,"OLED write failed or timed out; check model, 3.3V wiring and pull-ups"); return;
+  }
+  StaticJsonDocument<192> result;
+  result["status"]="completed";
+  result["note"]="Test pattern sent; unverified on actual display. Use Blank to clear display RAM.";
+  sendJson(200,result);
+}
+static void uartStartPost() {
+  if (!requireAdmin()) return;
+  String raw = server.arg("plain");
+  if (raw.length() == 0 || raw.length() > 256) {
+    errorJson(413,"UART request must be JSON <=256 bytes"); return;
+  }
+  StaticJsonDocument<256> obj;
+  if (deserializeJson(obj,raw) || !obj["pin"].is<int>() ||
+      !obj["baud"].is<int>() ||
+      (obj.containsKey("ack") && !obj["ack"].is<bool>())) {
+    errorJson(400,"UART RX pin and baud must be integers"); return;
+  }
+  const int pin = obj["pin"].as<int>(), baud = obj["baud"].as<int>();
+  const bool acknowledged = obj["ack"] | false;
+  if (!blaze_uart_baud_supported(baud)) {
+    errorJson(422,"UART supports 1200/2400/4800/9600 baud 8N1 only"); return;
+  }
+  const Blaze8266Decision decision = blaze8266UartPolicy(pin,acknowledged);
+  if (decision == BLAZE8266_ACK_REQUIRED) {
+    errorJson(409,"Acknowledge boot-sensitive UART RX pin"); return;
+  }
+  if (decision != BLAZE8266_ALLOW) {
+    errorJson(422,"Reserved, flash or unavailable UART RX pin denied"); return;
+  }
+  uartTick();
+  tickLab();
+  if (uartPin >= 0 || activePin >= 0) {
+    errorJson(409,"Stop active UART/GPIO experiment before starting another"); return;
+  }
+  uartReader.begin(baud,SWSERIAL_8N1,pin,-1,false,128);
+  if (!uartReader.isListening()) {
+    uartReader.end();
+    pinMode(pin,INPUT);
+    errorJson(503,"Software UART receiver could not start"); return;
+  }
+  uartPin = pin; uartBaud = baud; uartStarted = millis();
+  StaticJsonDocument<160> result;
+  result["status"]="running";
+  result["message"]="RX-only UART listening for at most 20 seconds";
+  sendJson(200,result);
+}
+static void uartGet() {
+  if (!requireAdmin()) return;
+  uartTick();
+  String hex, preview;
+  hex.reserve(2*BLAZE_UART_MAX_READ+1);
+  preview.reserve(BLAZE_UART_MAX_READ+1);
+  const char digits[]="0123456789ABCDEF";
+  int bytes = 0;
+  while (uartPin >= 0 && uartReader.available() && bytes < BLAZE_UART_MAX_READ) {
+    const int byteRead = uartReader.read();
+    if (byteRead < 0) break;
+    const uint8_t value = static_cast<uint8_t>(byteRead);
+    hex += digits[value >> 4];
+    hex += digits[value & 15];
+    preview += (value >= 32 && value <= 126) ? char(value) :
+               (value == 10 ? '\n' : '.');
+    bytes++;
+  }
+  StaticJsonDocument<896> result;
+  result["status"]=uartPin<0 ? "idle":"running";
+  result["pin"]=uartPin;
+  result["baud"]=uartBaud;
+  const uint32_t delta=static_cast<uint32_t>(millis()-uartStarted);
+  result["expires_in_ms"]=uartPin<0 ? 0 : (delta>=BLAZE_UART_LEASE_MS ? 0 : BLAZE_UART_LEASE_MS-delta);
+  result["bytes"]=bytes;
+  result["hex"]=hex;
+  result["text"]=preview;
+  sendJson(200,result);
+}
+static void uartStopPost() {
+  if (!requireAdmin()) return;
+  uartStop();
+  StaticJsonDocument<96> result;
+  result["status"]="idle";
+  sendJson(200,result);
+}
+static void loaderDisabled() {
+  if (!requireAdmin()) return;
+  errorJson(501,"FLASH and PREBOOT unavailable: image validation and recovery not yet proven on ESP8266");
+}
+static void indexGet() {
+  commonHeaders();
+  server.sendHeader("Content-Security-Policy",
+                    "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+  server.send_P(200, PSTR("text/html; charset=utf-8"), BLAZE_INDEX_HTML);
+}
+static void cssGet() {
+  commonHeaders();
+  server.send_P(200, PSTR("text/css; charset=utf-8"), BLAZE_STYLESHEET);
+}
+static void jsGet() {
+  commonHeaders();
+  server.send_P(200, PSTR("application/javascript; charset=utf-8"), BLAZE_APP_JS);
+}
+static void authCheckGet() {
+  if (!requireAdmin()) return;
+  StaticJsonDocument<96> doc;
+  doc["authenticated"] = true;
+  sendJson(200, doc);
+}
+static void beginServer() {
+  server.collectHeaders("X-Blaze-Token");
+  server.on("/",HTTP_GET,indexGet);
+  server.on("/style.css",HTTP_GET,cssGet);
+  server.on("/app.js",HTTP_GET,jsGet);
+  server.on("/api/auth/check",HTTP_GET,authCheckGet);
+  server.on("/api/status",HTTP_GET,statusGet);
+  server.on("/api/pins",HTTP_GET,pinsGet);
+  server.on("/api/gpio",HTTP_GET,gpioGet);
+  server.on("/api/gpio",HTTP_POST,gpioPost);
+  server.on("/api/gpio/stop",HTTP_POST,gpioStop);
+  server.on("/api/i2c/scan",HTTP_POST,i2cScanPost);
+  server.on("/api/oled/test",HTTP_POST,oledTestPost);
+  server.on("/api/uart",HTTP_GET,uartGet);
+  server.on("/api/uart/start",HTTP_POST,uartStartPost);
+  server.on("/api/uart/stop",HTTP_POST,uartStopPost);
+  server.on("/api/firmware/flash",HTTP_POST,loaderDisabled);
+  server.on("/api/firmware/preboot",HTTP_POST,loaderDisabled);
+  server.onNotFound([](){ errorJson(404,"Unknown route"); });
+  server.begin();
+}
+void setup() {
+  Serial.begin(115200);
+  Serial.println();
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA); // Enable radio BEFORE generating first-boot entropy.
+  WiFi.disconnect();
+  delay(100);
+  if (!provisionDevice()) {
+    Serial.println(F("FATAL: credential provisioning failed; AP disabled."));
+    return;
+  }
+  const uint32_t chip=ESP.getChipId();
+  char ssid[24];
+  snprintf(ssid,sizeof(ssid),"BlazeMCU-%04X",static_cast<unsigned>(chip & 0xFFFFU));
+  WiFi.mode(WIFI_AP);
+  if (!WiFi.softAP(ssid,credentials.ap,1,false,4)) {
+    Serial.println(F("FATAL: access-point creation failed."));
+    return;
+  }
+  beginServer();
+  initialized=true;
+  Serial.printf("BlazeMCU ESP8266 PREVIEW: %s; http://192.168.4.1\n", ssid);
+  Serial.printf("Per-device WPA2 AP password (serial only): %s\n",credentials.ap);
+  Serial.printf("Admin token (serial only): %s\n",credentials.token);
+  Serial.println(F("WARNING: serial credentials must not appear in customer logs."));
+  Serial.println(F("GPIO tests are session-only; FLASH and PREBOOT disabled."));
+}
+void loop() {
+  if (initialized) {
+    server.handleClient();
+    tickLab();
+    uartTick();
+  }
+  delay(1); // Yield to Wi-Fi/watchdog. No blocking lab delays.
+}

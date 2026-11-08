@@ -1,0 +1,10 @@
+Copyright (c) 2026 BlazeDevStudio. All rights reserved.
+
+No license to copy, modify, redistribute, sublicense, or commercially
+exploit the original BlazeMCU source code is granted by this repository.
+
+This temporary proprietary rights notice is not an OSI-approved open-source
+license. Public visibility on GitHub does not create a license.
+
+Dependencies are independently licensed by their respective authors,
+including Espressif ESP-IDF. See THIRD_PARTY_NOTICES.md.
