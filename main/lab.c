@@ -91,7 +91,7 @@ blaze_lab_status_t blaze_lab_status(void) {
   if (lock && xSemaphoreTake(lock, pdMS_TO_TICKS(250)) == pdTRUE) {
     st.pin = active_pin;
     st.output = active_output;
-    st.level = active_pin < 0 ? 0 : gpio_get_level((gpio_num_t)active_pin);
+    st.level = active_pin < 0 ? 0 : (active_output ? last_level : gpio_get_level((gpio_num_t)active_pin));
     st.rising = rising_count;
     st.falling = falling_count;
     if (active_pin >= 0) {

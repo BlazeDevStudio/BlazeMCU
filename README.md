@@ -19,18 +19,18 @@ A standalone ESP32-WROOM-32 reference-board starter firmware, intentionally sepa
 
 Requires **ESP-IDF v5.5.6** and a classic ESP32 target with **at least 4 MB flash**.
 
-\`\`\`sh
+```sh
 idf.py set-target esp32
 idf.py build
 # Only after validating hardware and power:
 idf.py -p /dev/ttyUSB0 flash monitor
-\`\`\`
+```
 
-The primary app image is under \`build/blazemcu_esp_starter.bin\`; a standalone app image is not a merged bootloader + partition-table flash image. **Do not preflash resale units yet**: validate the compiled image, partition size, electrical characteristics, credential provisioning, recovery and physical resets first.
+The primary app image is under `build/blazemcu_esp_starter.bin`; a standalone app image is not a merged bootloader + partition-table flash image. **Do not preflash resale units yet**: validate the compiled image, partition size, electrical characteristics, credential provisioning, recovery and physical resets first.
 
 ## First boot and access
 
-Power the board on via a trusted USB-to-serial connection (115200 baud); record the individual AP key and admin token displayed on its serial console. Join \`BlazeMCU-XXXX\` (final 4 hexadecimal MAC characters) and browse to \`http://192.168.4.1\`. Enter the admin token on Dashboard before starting GPIO tests. The token is kept only in that browser page's memory. Normal operation is offline.
+Power the board on via a trusted USB-to-serial connection (115200 baud); record the individual AP key and admin token displayed on its serial console. Join `BlazeMCU-XXXX` (final 4 hexadecimal MAC characters) and browse to `http://192.168.4.1`. Enter the admin token on Dashboard before starting GPIO tests. The token is kept only in that browser page's memory. Normal operation is offline.
 
 Factory provisioning must ensure every board receives unique credentials; this preview exposes them in serial logs so it is **not yet hardened against physical access, leaked logs, or hostile RF environments**. Losing credentials requires authorized serial/NVS recovery; do not erase NVS casually.
 
@@ -44,11 +44,11 @@ The 4 MB partition plan reserves factory firmware, OTA metadata and two OTA slot
 
 Run host-only policy checks (not actual ESP32 hardware tests):
 
-\`\`\`sh
+```sh
 cc -std=c11 -Wall -Wextra -Werror -Imain main/board_caps.c main/lab_policy.c tests/policy_test.c -o /tmp/blaze-policy
 /tmp/blaze-policy
 python3 -m unittest discover -s tests -v
-\`\`\`
+```
 
 CI additionally compiles the real ESP32 firmware and checks application-image size, but a green CI build cannot prove physical GPIO, OTA rollback, display wiring or boot behavior.
 

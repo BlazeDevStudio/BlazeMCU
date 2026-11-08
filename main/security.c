@@ -1,5 +1,6 @@
 #include "security.h"
 #include "esp_random.h"
+#include "bootloader_random.h"
 #include "esp_log.h"
 #include "nvs.h"
 #include <string.h>
@@ -17,9 +18,11 @@ static void random_token(char *out, size_t length) {
   memset(bytes, 0, sizeof(bytes));
 }
 esp_err_t blaze_security_init(void) {
+  /* Enable true entropy before Wi-Fi; disable before RF/ADC starts. */
+  bootloader_random_enable();
   nvs_handle_t nvs;
   esp_err_t e = nvs_open("blaze_auth", NVS_READWRITE, &nvs);
-  if (e != ESP_OK) return e;
+  if (e != ESP_OK) { bootloader_random_disable(); return e; }
   size_t len = sizeof(ap_pass);
   bool first_pass = nvs_get_str(nvs, "ap_pass", ap_pass, &len) != ESP_OK;
   if (first_pass) {
@@ -34,6 +37,7 @@ esp_err_t blaze_security_init(void) {
   }
   if (e == ESP_OK) e = nvs_commit(nvs);
   nvs_close(nvs);
+  bootloader_random_disable();
   if (e != ESP_OK) return e;
   /* Serial provisioning is physical-access only. Keep credentials off HTTP endpoints. */
   ESP_LOGW(TAG, "Device AP key (serial only): %s", ap_pass);

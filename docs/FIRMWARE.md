@@ -10,18 +10,18 @@ preview. Do not upload a binary from an unrelated ESP variant.
   export output. Different IDE/core versions may emit additional bootloader,
   partition or merged images; identify them by name and build logs.
 - Arduino CLI: install the Espressif ESP32 core, then run
-  \`arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries sketch/\`.
+  `arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries sketch/`.
   Pass board options appropriate to the exact chip and flash configuration.
-- PlatformIO: configure \`platform = espressif32\`, a correct \`board = ...\` and
-  matching partition scheme, then run \`pio run\`. Application binaries are
-  commonly in \`.pio/build/<environment>/firmware.bin\`.
-- ESP-IDF v5.5.6: \`idf.py set-target esp32 && idf.py build\`.
+- PlatformIO: configure `platform = espressif32`, a correct `board = ...` and
+  matching partition scheme, then run `pio run`. Application binaries are
+  commonly in `.pio/build/<environment>/firmware.bin`.
+- ESP-IDF v5.5.6: `idf.py set-target esp32 && idf.py build`.
   Use the app binary, not bootloader.bin or partition-table.bin, for an OTA slot.
 
 ## Image policy before any future FLASH/PREBOOT
 
 Target classic ESP32, 4 MB minimum, compatible chip revision, flash mode and
-encryption/security configuration. A valid \`0xE9\` image header alone does not
+encryption/security configuration. A valid `0xE9` image header alone does not
 prove bootability. Check the app header, chip ID, segment bounds, checksums,
 signature/secure-boot requirements, partition fit, anti-rollback and
 application startup behavior. This repository's OTA slot size is **0x120000**
@@ -34,7 +34,7 @@ boot protocol.
 
 ## PREBOOT gate
 
-ESP-IDF's \`ESP_OTA_IMG_NEW\` to \`PENDING_VERIFY\` rollback mechanism can allow
+ESP-IDF's `ESP_OTA_IMG_NEW` to `PENDING_VERIFY` rollback mechanism can allow
 one first boot before automatic rollback on subsequent reset without a
 validity mark. That alone is **not a proven PREBOOT contract**:
 - A trial app can mark itself valid and become persistent.
