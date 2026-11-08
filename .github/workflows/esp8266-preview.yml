@@ -40,6 +40,10 @@ jobs:
           /tmp/blaze8266-policy
           cc -std=c11 -Wall -Wextra -Werror tests/pwm_policy_test.c -o /tmp/blaze-pwm-policy
           /tmp/blaze-pwm-policy
+      - name: Validate shared UI contracts and JavaScript syntax
+        run: |
+          python3 -m unittest discover -s tests -v
+          node --check main/web/app.js
 
   esp8266-build:
     runs-on: ubuntu-latest

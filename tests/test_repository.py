@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 import unittest
+from html.parser import HTMLParser
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,8 +42,9 @@ class RepoContractTests(unittest.TestCase):
     def test_gpio_pwm_is_real_and_bounded_on_both_targets(self):
         html = (ROOT / "main/web/index.html").read_text()
         self.assertIn('<option value="pwm">', html)
-        self.assertIn('frequency_hz', html)
-        self.assertIn('duty_percent', html)
+        js = (ROOT / "main/web/app.js").read_text()
+        self.assertIn("frequency_hz", js)
+        self.assertIn("duty_percent", js)
         self.assertIn('min="100" max="1000"', html)
         esp32 = (ROOT / "main/lab.c").read_text()
         esp8266 = (ROOT / "esp8266/src/main.cpp").read_text()
@@ -61,6 +63,56 @@ class RepoContractTests(unittest.TestCase):
         for source in (esp32, esp8266):
             self.assertNotIn("nvs_set_", source)
             self.assertNotIn("esp_ota_write(", source)
+
+    def test_web_separated_and_authenticated_on_both_chips(self):
+        html = (ROOT / "main/web/index.html").read_text()
+        js = (ROOT / "main/web/app.js").read_text()
+        css = (ROOT / "main/web/style.css").read_text()
+        esp32 = (ROOT / "main/api.c").read_text()
+        esp8266 = (ROOT / "esp8266/src/main.cpp").read_text()
+        cmake = (ROOT / "main/CMakeLists.txt").read_text()
+        generator = (ROOT / "esp8266/scripts/embed_web.py").read_text()
+        self.assertIn('href="/style.css"', html)
+        self.assertIn('src="/app.js"', html)
+        self.assertNotIn("<style>", html)
+        self.assertNotIn("<script>", html)
+        self.assertNotIn("unsafe-inline", esp32)
+        self.assertNotIn("unsafe-inline", esp8266)
+        self.assertIn("style-src 'self'", esp32)
+        self.assertIn("script-src 'self'", esp8266)
+        for path in ("/style.css", "/app.js", "/api/auth/check"):
+            self.assertIn('"' + path + '"', esp32)
+            self.assertIn('"' + path + '"', esp8266)
+        for asset in ("web/index.html", "web/style.css", "web/app.js"):
+            self.assertIn(asset, cmake)
+            self.assertIn(asset, generator)
+        self.assertIn('auth_check_get(', esp32)
+        self.assertIn('authCheckGet()', esp8266)
+        self.assertIn("await request('/api/auth/check'", js)
+        self.assertNotIn("localStorage", js)
+        self.assertNotIn("sessionStorage", js)
+        self.assertIn('[hidden]', css)
+        self.assertLess(len(js.encode("utf-8")), 24000)
+
+    def test_web_document_id_contract(self):
+        html = (ROOT / "main/web/index.html").read_text()
+        js = (ROOT / "main/web/app.js").read_text()
+        class Ids(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.ids = set()
+            def handle_starttag(self, tag, attrs):
+                attributes = dict(attrs)
+                if attributes.get("id"):
+                    assert attributes["id"] not in self.ids, attributes["id"]
+                    self.ids.add(attributes["id"])
+        document = Ids()
+        document.feed(html)
+        names = set(re.findall(r"\$\('([a-zA-Z0-9]+)'\)", js))
+        self.assertFalse(names - document.ids, names - document.ids)
+        for section in ("dashboard", "gpio", "pins", "loader", "displays", "serial", "help"):
+            self.assertIn(section, document.ids)
+            self.assertIn("tab-" + section, document.ids)
 
     def test_docs_describe_both_actual_pwm_targets(self):
         readme = (ROOT / "README.md").read_text()

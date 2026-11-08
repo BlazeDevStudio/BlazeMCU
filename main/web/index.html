@@ -1,209 +1,165 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#101820">
-<title>BlazeMCU | ESP Starter</title>
-<style>
-:root{color-scheme:dark;--bg:#101820;--panel:#1b2630;--line:#40505b;--ink:#f4f6f7;--muted:#bbc9cf;--accent:#ffb357}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,sans-serif}
-header{border-bottom:1px solid var(--line);padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px}
-strong{letter-spacing:.02em}header small{color:var(--muted)}
-main{max-width:960px;margin:auto;padding:18px}
-nav{display:flex;overflow-x:auto;gap:6px;padding-bottom:10px;margin-bottom:14px}
-button,input,select{font:inherit}button{border:1px solid var(--line);background:#273744;color:var(--ink);border-radius:8px;padding:10px 13px;cursor:pointer}
-button[aria-current="page"],button.primary{background:var(--accent);color:#1e1711;border-color:var(--accent);font-weight:650}
-button:disabled{opacity:.5;cursor:not-allowed}
-section{display:none}section.active{display:block}
-article{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:14px}
-h1{font-size:1.5rem;margin:0}h2{font-size:1.1rem;margin:0 0 10px}
-p{margin:8px 0;color:var(--muted)}
-label{display:block;margin:9px 0 5px}input,select{width:100%;max-width:520px;border:1px solid var(--line);padding:10px;background:#0e151b;border-radius:6px;color:var(--ink)}
-input[type="checkbox"]{width:auto;accent-color:var(--accent)}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
-.notice{border-left:3px solid var(--accent);padding:9px 12px;background:#302b25}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.88rem;color:var(--muted)}
-table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{text-align:left;padding:7px;border-bottom:1px solid var(--line);vertical-align:top}
-.scroll{overflow:auto;max-height:490px}
-.bad{color:#ffc4a2}.good{color:#99e5c5}code{color:#ffcd96}
-@media(max-width:580px){main{padding:10px}article{padding:13px}header{padding:12px}th,td{padding:5px}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#202b34">
+  <meta name="color-scheme" content="light">
+  <title>BlazeMCU — Device laboratory</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
 </head>
 <body>
-<header><div><h1>BlazeMCU</h1><small>ESP Starter / Hardware Laboratory</small></div><small>0.2.0 PREVIEW</small></header>
-<main>
-<nav aria-label="Main sections">
-<button data-tab="dashboard" aria-current="page">Dashboard</button>
-<button data-tab="loader">Firmware</button>
-<button data-tab="gpio">GPIO Lab</button>
-<button data-tab="displays">Displays</button>
-<button data-tab="serial">Serial</button>
-<button data-tab="pins">Pins</button>
-<button data-tab="help">Help</button>
-</nav>
-<section id="dashboard" class="active">
-<article><h2>Device status</h2><pre id="device">Connecting…</pre></article>
-<article><h2>Administrative access</h2>
-<p>Read the individual admin token from the board's serial console. It is held only in this browser page's memory, not saved to storage.</p>
-<label for="token">Admin token</label><input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="32-character device token">
-<div class="actions"><button id="tokenApply">Use token</button><button id="tokenClear">Clear token</button></div>
-<p id="authstate">Token not set</p></article>
-</section>
-<section id="loader">
-<article><h2>Firmware loader</h2><p class="notice">FLASH and PREBOOT are disabled in this preview. No uploaded firmware can run or overwrite the factory image.</p>
-<p>Only compiled compatible board-specific application images (.bin) may eventually be eligible. Arduino .ino source files are not firmware images.</p>
-<label for="firmwareFile">Compiled application binary (.bin)</label><input type="file" id="firmwareFile" accept=".bin,application/octet-stream" disabled>
-<div class="actions"><button disabled>PREBOOT · unavailable</button><button disabled>FLASH · unavailable</button></div>
-<p>See Help for Arduino IDE, Arduino CLI, PlatformIO and ESP-IDF export instructions.</p></article>
-</section>
-<section id="gpio">
-<article><h2>GPIO experiment</h2><p>One pin at a time. All operations expire after 20 seconds and are discarded on reset. Do not exceed 3.3 V GPIO limits.</p>
-<div class="grid"><div>
-<label for="pin">GPIO</label><select id="pin"></select>
-<label for="mode">Requested mode</label><select id="mode"><option value="input">Input monitor</option><option value="output">Output control</option><option value="pwm">PWM · pulses / LED dimming</option></select>
-<label for="level">Output state</label><select id="level"><option value="0">LOW</option><option value="1">HIGH</option></select>
-<label><input type="checkbox" id="pullup"> Enable internal pull-up for input (where supported)</label>
-<div id="pwmControls">
-<label for="frequency">PWM frequency: <output id="frequencyValue">500 Hz</output></label>
-<input type="range" id="frequency" min="100" max="1000" step="50" value="500">
-<label for="duty">PWM duty / LED brightness: <output id="dutyValue">50%</output></label>
-<input type="range" id="duty" min="0" max="100" step="1" value="50">
-<p id="pwmEstimate">Estimated period: 2.00 ms · HIGH time: 1.00 ms</p>
-</div>
-</div><div><h2>Selected pin</h2><p id="pinInfo">Loading pin capabilities…</p>
-<label><input type="checkbox" id="ack"> I understand the warning. Proceed anyway where technically supported.</label></div></div>
-<div class="actions"><button class="primary" id="start">Start test</button><button id="stop">STOP / release pin</button></div>
-<p id="gpioMessage" role="status">Idle</p><pre id="gpioStatus">-</pre>
-</article>
-<article><h2>Not yet available</h2><p>Input-to-output reaction mapping, ADC and debounce settings are not connected in this build. PWM supports a single pin at 100–1000 Hz, up to 20 seconds, on PWM-capable pins only. Period and duty values are estimates, not measured waveforms.</p></article>
-</section>
-<section id="displays"><article><h2>Display laboratory</h2><p class="notice">Unimplemented. I²C scanning, SPI drivers, slideshow and frame-rate tests have no active backend yet.</p>
-<p>Planned: SSD1306, SH1106, HD44780 I²C backpack, ST7735, ST7789 and ILI9341. I²C addresses alone cannot identify a display controller; SPI discovery is manual.</p></article></section>
-<section id="serial"><article><h2>Serial monitor</h2><p class="notice">Unimplemented. UART RX/TX and log streaming are not active in this firmware.</p>
-<p>ESP GPIO is generally 3.3 V logic. Never connect RS-232 voltage levels directly.</p></article></section>
-<section id="pins"><article><h2>Complete pin reference</h2><p>The selected board's entire documented pin reference is visible, including flash-reserved, boot-sensitive, input-only, analog and unavailable pins. Capabilities represent reference hardware; always check your actual PCB.</p>
-<div class="scroll"><table><thead><tr><th>GPIO</th><th>Category</th><th>Digital</th><th>Reference caution</th></tr></thead><tbody id="pinRows"></tbody></table></div></article></section>
-<section id="help"><article><h2>How to prepare a .bin</h2>
-<p><strong>Arduino IDE:</strong> Select the exact ESP32 board, flash size and partition scheme. Use Sketch → Export Compiled Binary. Do not upload .ino directly.</p>
-<p><strong>Arduino CLI:</strong> Install esp32 core, select the FQBN, then run <code>arduino-cli compile --fqbn esp32:esp32:esp32 --export-binaries path/to/sketch</code>.</p>
-<p><strong>PlatformIO:</strong> Build a matching <code>platform = espressif32</code> environment. The application image appears under <code>.pio/build/&lt;env&gt;/firmware.bin</code>.</p>
-<p><strong>ESP-IDF:</strong> Run <code>idf.py set-target esp32</code>, then <code>idf.py build</code>. Use the application .bin for compatible OTA slots; a merged full-flash image is not interchangeable with an OTA application image.</p>
-<p>ESP32 builds use ESP-IDF; ESP8266 builds use a separate PlatformIO/Arduino core toolchain. Select the correct chip and board before compiling. ESP32 factory/OTA layouts are not interchangeable with ESP8266 flash layouts.</p><p>4 MB flash and partition compatibility are mandatory for the current reference boards. A factory partition does not automatically make a boot failure recoverable without a serial flashing path.</p>
-<p>For faults, use the chip-specific ROM serial download mode (GPIO0 LOW at reset where appropriate) and esptool to reflash an authorized recovery image. Verify your specific board's buttons and wiring first.</p></article></section>
-</main>
-<script>
-'use strict';
-let token = '';
-let pins = [];
-const el = id => document.getElementById(id);
-const asText = (id, value) => { el(id).textContent = value; };
-async function request(path, method, body) {
-  const opts = {method: method || 'GET', cache: 'no-store', headers: {}};
-  if (method === 'POST') {
-    opts.headers['X-Blaze-Token'] = token;
-    if (body !== undefined) {
-      opts.headers['Content-Type'] = 'application/json';
-      opts.body = JSON.stringify(body);
-    }
-  }
-  const r = await fetch(path, opts);
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.message || 'HTTP ' + r.status);
-  return data;
-}
-function activePin() { return pins.find(x => x.number === Number(el('pin').value)); }
-function showPin() {
-  const p = activePin();
-  if (!p) return;
-  asText('pinInfo', (p.label || ('GPIO' + p.number)) + ' · ' + p.category + '\n' +
-    'Input: ' + p.input + ' · Output: ' + p.output + ' · ADC: ' + p.adc + ' · PWM capability: ' + p.pwm +
-    '\n' + p.warning);
-  el('ack').checked = false;
-}
-function fillPins() {
-  const select = el('pin'), rows = el('pinRows');
-  pins.forEach(p => {
-    const o = document.createElement('option');
-    o.value = String(p.number);
-    o.textContent = (p.label || ('GPIO' + p.number)) + ' · ' + p.category;
-    select.appendChild(o);
-    const tr = document.createElement('tr');
-    [p.label || ('GPIO' + p.number), p.category, (p.input ? 'IN ' : '') + (p.output ? 'OUT' : ''), p.warning].forEach(value => {
-      const td = document.createElement('td'); td.textContent = String(value); tr.appendChild(td);
-    });
-    rows.appendChild(tr);
-  });
-  select.value = String((pins.find(p => p.number === 32 && p.output) || pins.find(p => p.number === 4 && p.output) || pins[0]).number); showPin();
-}
-async function updateGpio() {
-  try {
-    const s = await request('/api/gpio');
-    asText('gpioStatus', JSON.stringify(s, null, 2));
-  } catch (err) { asText('gpioStatus', err.message); }
-}
-document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('[data-tab]').forEach(x => x.removeAttribute('aria-current'));
-  b.setAttribute('aria-current', 'page');
-  document.querySelectorAll('section').forEach(x => x.classList.toggle('active', x.id === b.dataset.tab));
-}));
-el('pin').addEventListener('change', showPin);
-function updateControls() {
-  const mode = el('mode').value;
-  const pwm = mode === 'pwm';
-  el('level').disabled = mode !== 'output';
-  el('pullup').disabled = mode !== 'input';
-  el('frequency').disabled = !pwm;
-  el('duty').disabled = !pwm;
-  const freq = Number(el('frequency').value);
-  const duty = Number(el('duty').value);
-  const periodMs = 1000 / freq;
-  asText('frequencyValue', freq + ' Hz');
-  asText('dutyValue', duty + '%');
-  asText('pwmEstimate', 'Estimated period: ' + periodMs.toFixed(2) +
-    ' ms · HIGH time: ' + (periodMs * duty / 100).toFixed(2) + ' ms');
-}
-el('mode').addEventListener('change', updateControls);
-el('frequency').addEventListener('input', updateControls);
-el('duty').addEventListener('input', updateControls);
-updateControls();
-el('tokenApply').addEventListener('click', () => {
-  token = el('token').value;
-  el('token').value = '';
-  asText('authstate', token ? 'Admin token loaded for this page only' : 'Token not set');
-});
-el('tokenClear').addEventListener('click', () => { token = ''; asText('authstate', 'Token cleared'); });
-el('start').addEventListener('click', async () => {
-  try {
-    const mode = el('mode').value;
-    const body = {
-      pin:Number(el('pin').value),mode,
-      level:Number(el('level').value),pullup:mode === 'input' && el('pullup').checked,
-      ack:el('ack').checked
-    };
-    if (mode === 'pwm') {
-      body.frequency_hz = Number(el('frequency').value);
-      body.duty_percent = Number(el('duty').value);
-    }
-    const data = await request('/api/gpio','POST',body);
-    asText('gpioMessage', data.message);
-  } catch (err) { asText('gpioMessage', err.message); }
-  await updateGpio();
-});
-el('stop').addEventListener('click', async () => {
-  try { await request('/api/gpio/stop','POST'); asText('gpioMessage','Released'); }
-  catch (err) { asText('gpioMessage', err.message); }
-  await updateGpio();
-});
-async function startup() {
-  try { asText('device', JSON.stringify(await request('/api/status'),null,2)); }
-  catch (err) { asText('device', err.message); }
-  try { pins = (await request('/api/pins')).pins; fillPins(); }
-  catch (err) { asText('pinInfo', err.message); }
-  await updateGpio();
-}
-startup();
-setInterval(updateGpio, 1000);
-</script>
+  <header class="masthead">
+    <div class="mast-inner">
+      <div class="identity">
+        <div class="mark" aria-hidden="true">B<span>/</span>M</div>
+        <div><div class="product">BlazeMCU</div><div class="subtitle">ESP starter · Hardware laboratory</div></div>
+      </div>
+      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.3.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
+    </div>
+  </header>
+  <main class="shell">
+    <div class="workspace-head">
+      <div><p class="overline">LOCAL DEVICE WORKSPACE</p><h1 id="pageTitle">Overview</h1></div>
+      <div class="connection" id="connectionState" role="status">Connecting to 192.168.4.1</div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Device workspace">
+      <button id="tab-dashboard" role="tab" aria-selected="true" aria-controls="dashboard" data-tab="dashboard">Overview</button>
+      <button id="tab-gpio" role="tab" aria-selected="false" aria-controls="gpio" data-tab="gpio">GPIO lab</button>
+      <button id="tab-pins" role="tab" aria-selected="false" aria-controls="pins" data-tab="pins">Pin reference</button>
+      <button id="tab-loader" role="tab" aria-selected="false" aria-controls="loader" data-tab="loader">Firmware</button>
+      <button id="tab-displays" role="tab" aria-selected="false" aria-controls="displays" data-tab="displays">Displays</button>
+      <button id="tab-serial" role="tab" aria-selected="false" aria-controls="serial" data-tab="serial">Serial</button>
+      <button id="tab-help" role="tab" aria-selected="false" aria-controls="help" data-tab="help">Help</button>
+    </nav>
+
+    <section id="dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="two-up">
+        <article class="panel">
+          <div class="panel-head"><h2>Device information</h2><span class="small-cap">Live · read only</span></div>
+          <dl class="facts">
+            <div><dt>Board profile</dt><dd id="deviceBoard">—</dd></div>
+            <div><dt>Firmware</dt><dd id="deviceVersion">—</dd></div>
+            <div><dt>Free heap</dt><dd id="deviceHeap">—</dd></div>
+            <div><dt>Flash capacity</dt><dd id="deviceFlash">—</dd></div>
+            <div><dt>Local portal</dt><dd>192.168.4.1</dd></div>
+            <div><dt>Firmware loader</dt><dd>Not enabled</dd></div>
+          </dl>
+          <button class="quiet" id="refreshDevice" type="button">Refresh device status</button>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h2>Administrative access</h2><span class="small-cap">Protected operations</span></div>
+          <p>The device prints its individual admin token to the provisioning serial console. Verify it here before operating GPIO.</p>
+          <label for="token">Device admin token</label>
+          <input type="password" id="token" autocomplete="off" spellcheck="false" placeholder="32-character token" maxlength="64">
+          <div class="actions">
+            <button class="primary" id="tokenApply" type="button">Verify token</button>
+            <button class="quiet" id="tokenClear" type="button">Clear access</button>
+          </div>
+          <p class="feedback" id="authstate" role="status">Not authenticated</p>
+          <p class="fine-print">Token is held in this page's memory only. HTTP access is restricted to the board's local Wi-Fi network; this is not a production-grade account system.</p>
+        </article>
+      </div>
+      <div class="safety-strip"><strong>Preview firmware.</strong> The GPIO lab is operational in source, but electrical behavior and recovery have not been certified on physical boards. Disconnect motors, relays and high-current loads.</div>
+    </section>
+
+    <section id="gpio" role="tabpanel" aria-labelledby="tab-gpio" hidden>
+      <div class="lab-layout">
+        <article class="panel">
+          <div class="panel-head"><h2>Configure experiment</h2><span class="small-cap">One pin · 20 seconds</span></div>
+          <p class="section-note">Every documented pin is selectable. Hardware limits remain enforced, even after you acknowledge a warning.</p>
+          <div class="field-row">
+            <div class="field"><label for="pin">Target pin</label><select id="pin"><option>Loading pins…</option></select></div>
+            <div class="field"><label for="mode">Operation</label>
+              <select id="mode"><option value="input">Monitor input</option><option value="output">Set output HIGH / LOW</option><option value="pwm">PWM · pulses / dimming</option></select>
+            </div>
+          </div>
+          <div class="pin-detail">
+            <div class="pin-detail-top"><strong id="pinLabel">Pin reference loading…</strong><span id="pinCategory">—</span></div>
+            <p id="pinCapabilities">—</p>
+            <p id="pinWarning">—</p>
+          </div>
+          <div class="field" id="outputControls"><label for="level">Digital output state</label>
+            <select id="level"><option value="0">LOW · 0</option><option value="1">HIGH · 1</option></select>
+          </div>
+          <div class="field" id="inputControls"><label class="check-line"><input type="checkbox" id="pullup"> Enable internal pull-up (if supported)</label></div>
+          <div class="pwm-settings" id="pwmControls" hidden>
+            <label for="frequency">Frequency <output id="frequencyValue">500 Hz</output></label>
+            <input type="range" id="frequency" min="100" max="1000" step="50" value="500">
+            <label for="duty">Duty cycle <output id="dutyValue">50%</output></label>
+            <input type="range" id="duty" min="0" max="100" step="1" value="50">
+            <p class="calculation" id="pwmEstimate">Estimated period: 2.00 ms · HIGH: 1.00 ms</p>
+          </div>
+          <label class="acknowledge" id="ackWrap"><input type="checkbox" id="ack"><span>I understand this pin's restrictions and want to proceed where electrically supported.</span></label>
+          <div class="actions action-tray">
+            <button class="primary" type="button" id="start">Start / apply</button>
+            <button class="danger" type="button" id="stop">STOP / release pin</button>
+          </div>
+          <p class="feedback" role="status" id="gpioMessage">Ready. Verify admin access from Overview to start.</p>
+        </article>
+        <article class="panel readout">
+          <div class="panel-head"><h2>Live readout</h2><span id="runState" class="state">Idle</span></div>
+          <div class="level-block"><span class="small-cap">DIGITAL LEVEL</span><strong id="liveLevel">—</strong><span id="livePin">No active pin</span></div>
+          <div class="metric-grid">
+            <div><span>Rising edges</span><strong id="rising">0</strong></div>
+            <div><span>Falling edges</span><strong id="falling">0</strong></div>
+            <div><span>Lease remaining</span><strong id="remaining">—</strong></div>
+            <div><span>Running mode</span><strong id="runningMode">—</strong></div>
+          </div>
+          <div class="lease-track" aria-hidden="true"><div class="lease-fill" id="leaseFill"></div></div>
+          <p class="fine-print" id="pwmRunning">The output readout reports commanded values, not measured electrical waveforms. Sampled input edges may be missed at high frequency.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="pins" role="tabpanel" aria-labelledby="tab-pins" hidden>
+      <article class="panel">
+        <div class="panel-head"><h2>Board pin reference</h2><span id="pinCount" class="small-cap">Loading…</span></div>
+        <p>All documented pins remain visible by default, including absent, flash-connected, analog-only and boot-sensitive pins. The selected hardware profile is a reference, not proof of physical PCB exposure.</p>
+        <div class="search-row"><label for="pinSearch">Find GPIO, alias or capability</label><input type="search" id="pinSearch" placeholder="Example: GPIO34, D1, strap, flash" autocomplete="off"></div>
+        <div class="pin-list" id="pinRows" aria-live="polite"></div>
+      </article>
+    </section>
+
+    <section id="loader" role="tabpanel" aria-labelledby="tab-loader" hidden>
+      <article class="panel narrow">
+        <div class="panel-head"><h2>Firmware loader</h2><span class="state">Not available</span></div>
+        <p>FLASH and one-time PREBOOT are blocked until image validation, boot selection and physical recovery are verified independently on each chip family.</p>
+        <div class="safety-strip">No binary uploaded through this page can overwrite the board. A compiled <code>.bin</code> must match the exact chip, flash layout and application partition.</div>
+        <label for="firmwareFile">Application binary (.bin only)</label>
+        <input type="file" id="firmwareFile" accept=".bin,application/octet-stream" disabled>
+        <div class="actions"><button disabled type="button">PREBOOT · unavailable</button><button disabled type="button">FLASH · unavailable</button></div>
+        <p class="fine-print">Source .ino files cannot be flashed as compiled application images. See the Help tab for compilation options.</p>
+      </article>
+    </section>
+
+    <section id="displays" role="tabpanel" aria-labelledby="tab-displays" hidden>
+      <article class="panel narrow"><div class="panel-head"><h2>Display diagnostics</h2><span class="state">Not implemented</span></div>
+        <p>I²C and SPI driver initialization, the address scanner and the slideshow engine are not active in this preview.</p>
+        <p class="fine-print">Planned drivers: SSD1306, SH1106, HD44780 I²C, ST7735, ST7789, ILI9341. An I²C acknowledgment alone cannot identify a display controller; SPI displays require explicit configuration.</p>
+      </article>
+    </section>
+
+    <section id="serial" role="tabpanel" aria-labelledby="tab-serial" hidden>
+      <article class="panel narrow"><div class="panel-head"><h2>Serial diagnostics</h2><span class="state">Not implemented</span></div>
+        <p>Browser UART RX/TX, timestamped messages and sensor logs are not connected to a working backend.</p>
+        <div class="safety-strip">ESP GPIO uses 3.3 V logic. Never connect RS-232 voltage-level signals directly to an ESP pin.</div>
+      </article>
+    </section>
+
+    <section id="help" role="tabpanel" aria-labelledby="tab-help" hidden>
+      <article class="panel narrow"><div class="panel-head"><h2>Prepare compatible firmware</h2><span class="small-cap">Reference instructions</span></div>
+        <p><strong>Arduino IDE:</strong> Select the correct ESP board, flash size and build options, then use Sketch → Export Compiled Binary.</p>
+        <p><strong>Arduino CLI:</strong> Install the matching core and use <code>arduino-cli compile --fqbn &lt;board&gt; --export-binaries sketch/</code>.</p>
+        <p><strong>PlatformIO:</strong> Build the environment matching the board. The app binary is typically found under <code>.pio/build/&lt;env&gt;/firmware.bin</code>.</p>
+        <p><strong>ESP-IDF (ESP32):</strong> Run <code>idf.py set-target esp32</code> and <code>idf.py build</code>. App images are not merged flash images. ESP8266 uses a different build and boot process.</p>
+        <h3>Safety & recovery</h3>
+        <p>ROM serial download mode may allow re-flashing a damaged board (typically GPIO0 LOW during reset); the USB interface, power and flash offsets are board-specific. A factory partition does not guarantee automatic fallback.</p>
+        <p>Never treat a matching filename, I²C address, or GPIO capability as a guarantee of hardware compatibility. Consult the board manufacturer's pinout before connecting loads.</p>
+      </article>
+    </section>
+    <footer>BlazeDevStudio · Offline device tools <span>Build 0.3.0-preview · No cloud services required</span></footer>
+  </main>
 </body>
 </html>

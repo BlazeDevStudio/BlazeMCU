@@ -142,7 +142,7 @@ static void tickLab() {
 static void statusGet() {
   StaticJsonDocument<512> doc;
   doc["product"]="BlazeMCU ESP Starter";
-  doc["version"]="0.2.0-preview-esp8266";
+  doc["version"]="0.3.0-preview-esp8266";
   doc["board"]=BOARD;
   doc["cores"]=1;
   doc["heap_free"]=ESP.getFreeHeap();
@@ -281,12 +281,29 @@ static void loaderDisabled() {
 static void indexGet() {
   commonHeaders();
   server.sendHeader("Content-Security-Policy",
-                    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'");
+                    "default-src 'none'; style-src 'self'; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
   server.send_P(200, PSTR("text/html; charset=utf-8"), BLAZE_INDEX_HTML);
+}
+static void cssGet() {
+  commonHeaders();
+  server.send_P(200, PSTR("text/css; charset=utf-8"), BLAZE_STYLESHEET);
+}
+static void jsGet() {
+  commonHeaders();
+  server.send_P(200, PSTR("application/javascript; charset=utf-8"), BLAZE_APP_JS);
+}
+static void authCheckGet() {
+  if (!requireAdmin()) return;
+  StaticJsonDocument<96> doc;
+  doc["authenticated"] = true;
+  sendJson(200, doc);
 }
 static void beginServer() {
   server.collectHeaders("X-Blaze-Token");
   server.on("/",HTTP_GET,indexGet);
+  server.on("/style.css",HTTP_GET,cssGet);
+  server.on("/app.js",HTTP_GET,jsGet);
+  server.on("/api/auth/check",HTTP_GET,authCheckGet);
   server.on("/api/status",HTTP_GET,statusGet);
   server.on("/api/pins",HTTP_GET,pinsGet);
   server.on("/api/gpio",HTTP_GET,gpioGet);

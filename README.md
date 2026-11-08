@@ -1,6 +1,6 @@
 # BlazeMCU — ESP Starter & Hardware Laboratory
 
-**0.2.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
+**0.3.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
 
 A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board starter firmware, intentionally separate from Blaze MCU Studio, BlazePwifi, Phoenix, and the CoinOperatedEcosystem.
 
@@ -8,7 +8,9 @@ A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board star
 
 - ESP-IDF Wi-Fi SoftAP (192.168.4.1); SSID BlazeMCU-XXXX from device MAC.
 - Per-device generated WPA2 AP password and independent admin token in NVS; shown on serial console.
-- Mobile web dashboard and complete 40-entry classic ESP32 pin reference, including unsupported/reserved pins.
+- Shared mobile technician console with focused live status, searchable complete chip-specific pin references and responsive controls.
+- Standalone HTML, CSS and JavaScript assets with one source across both targets; strict no-inline-script/style page policy.
+- Credential verification uses the real device-auth endpoint; the browser never claims authentication on token entry alone.
 - Admin-token-gated **single-pin** digital HIGH/LOW or sampled input testing, plus PWM pulse/brightness control at 100–1000 Hz and 0–100% duty (backend enforced).
 - Sensitive pin acknowledgment, input-only rejection of output driving, flash-pin hard deny.
 - Session-only GPIO; 20-second timeout and explicit STOP release; no persisted GPIO choices.
@@ -50,6 +52,12 @@ All GPIO0–GPIO39 appear in the reference, including unavailable, input-only, f
 
 The ESP32-only 4 MB partition plan reserves factory firmware, OTA metadata and two OTA slots. ESP8266 uses its framework's separate flash arrangement. OTA rollback is configured as preparation only: **neither FLASH nor PREBOOT is enabled**. See [recovery](docs/RECOVERY.md), [firmware compilation](docs/FIRMWARE.md) and [hardware rules](docs/HARDWARE.md).
 
+## Frontend structure and security
+
+The only authored browser sources are `main/web/index.html`, `main/web/style.css` and `main/web/app.js`. The ESP32 embeds and serves each separately via ESP-IDF; the ESP8266 PlatformIO pre-build generator embeds exactly the same assets in PROGMEM. No duplicate or stale web implementation is committed to `esp8266/`.
+
+The dashboard verifies an admin token through `GET /api/auth/check` before activating authenticated controls. An invalid token is not retained in browser state. The token and GPIO lab selections stay in page memory only. The web UI has no external fonts, CDN scripts, telemetry, local storage or internet dependency; it uses a Content Security Policy without `unsafe-inline`. This strengthens browser security but does not solve local-network eavesdropping or exposed serial provisioning secrets.
+
 ## Quality gates
 
 ESP8266's native pin policy is exercised separately:
@@ -68,6 +76,7 @@ Run host-only policy checks (not actual ESP32 hardware tests):
 cc -std=c11 -Wall -Wextra -Werror -Imain main/board_caps.c main/lab_policy.c tests/policy_test.c -o /tmp/blaze-policy
 /tmp/blaze-policy
 python3 -m unittest discover -s tests -v
+node --check main/web/app.js
 ```
 
 CI additionally compiles the real ESP32 firmware and checks application-image size, but a green CI build cannot prove physical GPIO, OTA rollback, display wiring or boot behavior.

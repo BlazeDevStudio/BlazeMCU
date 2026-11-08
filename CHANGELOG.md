@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0-preview (structure and UI/UX cleanup — no release)
+
+- Split the shared dashboard into semantic HTML, CSS and JavaScript with one source of truth.
+- Removed inline script/style execution policy; static resources embedded and served independently on ESP32 and ESP8266.
+- Replaced raw JSON readouts with compact device facts, guarded admin-token verification, live GPIO measurements and searchable pin reference.
+- Improved keyboard/focus and narrow-screen navigation, warning acknowledgement and disabled-feature labeling.
+- Added exact static asset/router/CSP/auth contracts and JavaScript syntax checks to both CI matrices.
+- Hardware flashing, one-time PREBOOT, electrical and reset verification remain unproven.
+
 ## 0.2.0-preview (dual-target GPIO PWM development)
 
 - Shared 100–1000 Hz, 0–100% PWM validation across ESP32 / ESP8266, with hardware LEDC on ESP32 and nonblocking ESP8266 software PWM.

@@ -35,3 +35,7 @@ manual selection. Never pretend a missing display was successfully initialized.
 ## PWM preview
 
 PWM uses ESP32 LEDC or ESP8266 software PWM at 100–1000 Hz (inclusive) with 0–100% duty, one pin at a time, stopped by explicit STOP or session expiry; no physical oscilloscope or power-load validation performed. A displayed period or duty cycle is an estimate, not a measurement. Output drivers must not be directly connected to motors, coils or high-current loads.
+
+## Browser administration (0.3 preview)
+
+The dashboard must confirm the per-device admin token with /api/auth/check before allowing GPIO mutation. CSS and JavaScript are served from device flash with CSP that disallows inline scripts and styles; no external assets are loaded. This is an offline lab UI, not an HTTPS or customer-account system. Physical serial credential exposure and AP-side attack resistance still require testing and manufacturing hardening.
