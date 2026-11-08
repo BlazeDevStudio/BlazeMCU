@@ -62,6 +62,18 @@ async function mockDevice(page) {
         body = {status:'completed', sda:input.sda, scl:input.scl,
           addresses:[0x3C,0x68], note:'Address ACK only'};
       }
+    } else if (path === '/api/oled/test' && method === 'POST') {
+      const input = req.postDataJSON();
+      if (!input.confirm) {
+        status = 409; body = {message:'Confirm model and wiring'};
+      } else if (![60,61].includes(input.address) ||
+                 !['ssd1306','sh1106'].includes(input.controller) ||
+                 !['checker','border','blank'].includes(input.pattern)) {
+        status = 422; body = {message:'Unsupported OLED'};
+      } else {
+        body = {status:'completed',
+          note:'Test pattern sent; unverified on actual display. Use Blank to clear display RAM.'};
+      }
     } else {
       status = 404; body = {message:'Unknown route'};
     }
@@ -132,4 +144,27 @@ test('I2C discovery displays ACK addresses only and never guesses display', asyn
   await expect(page.locator('#i2cResults')).toContainText('0x68');
   await expect(page.locator('#i2cMessage')).toContainText('Device type not identified');
   expect(calls.some(x => x.path === '/api/i2c/scan' && x.authorized)).toBe(true);
+});
+
+test('OLED requires model confirmation and never silently guesses display type', async ({page}) => {
+  const calls = await connect(page);
+  await authenticate(page);
+  await page.locator('#tab-displays').click();
+  await expect(page.locator('#oledModel')).toHaveValue('ssd1306');
+  await expect(page.locator('#oledAddress')).toHaveValue('60');
+  await page.locator('#oledRun').click();
+  await expect(page.locator('#oledMessage')).toContainText('Confirm the actual');
+  expect(calls.filter(x => x.path === '/api/oled/test')).toHaveLength(0);
+  await page.locator('#oledModel').selectOption('sh1106');
+  await page.locator('#oledAddress').selectOption('61');
+  await page.locator('#oledPattern').selectOption('border');
+  await page.locator('#oledConfirm').check();
+  await page.locator('#oledRun').click();
+  await expect(page.locator('#oledMessage')).toContainText('Test pattern sent');
+  await expect(page.locator('#oledConfirm')).not.toBeChecked();
+  expect(calls.filter(x => x.path === '/api/oled/test' && x.authorized)).toHaveLength(1);
+  await page.locator('#oledPattern').selectOption('blank');
+  await page.locator('#oledRun').click();
+  await expect(page.locator('#oledMessage')).toContainText('Confirm the actual');
+  expect(calls.filter(x => x.path === '/api/oled/test')).toHaveLength(1);
 });

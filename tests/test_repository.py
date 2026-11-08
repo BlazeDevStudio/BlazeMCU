@@ -132,6 +132,31 @@ class RepoContractTests(unittest.TestCase):
         self.assertIn("0x3C", test_source)
         self.assertIn("simulated api, no hardware", (ROOT / ".github/workflows/esp32-preview.yml").read_text().lower())
 
+    def test_oled_controller_is_explicit_and_address_bounded(self):
+        html = (ROOT / "main/web/index.html").read_text()
+        js = (ROOT / "main/web/app.js").read_text()
+        esp32 = (ROOT / "main/api.c").read_text()
+        esp8266 = (ROOT / "esp8266/src/main.cpp").read_text()
+        cdriver = (ROOT / "main/oled_diag.c").read_text()
+        model = (ROOT / "common/oled_pattern.h").read_text()
+        for id_ in ("oledModel", "oledAddress", "oledPattern", "oledConfirm", "oledRun", "oledMessage"):
+            self.assertIn('id="' + id_ + '"', html)
+        self.assertIn("await request('/api/oled/test','POST'", js)
+        self.assertIn('"/api/oled/test", HTTP_POST, oled_post', esp32)
+        self.assertIn('"/api/oled/test",HTTP_POST,oledTestPost', esp8266)
+        self.assertIn('!confirmed', esp32)
+        self.assertIn('!obj["confirm"].as<bool>()', esp8266)
+        self.assertIn('blaze_lab_status().pin >= 0', cdriver)
+        self.assertIn('if (activePin >= 0)', esp8266)
+        self.assertIn('address == 0x3c || address == 0x3d', model)
+        self.assertIn('BLAZE_OLED_CHUNK 16', model)
+        self.assertIn('0xad, 0x8b', model)
+        self.assertIn('0x8d, 0x14', model)
+        self.assertIn('blaze_oled_allowed', cdriver)
+        self.assertNotIn("unsafe-inline", esp32)
+        self.assertNotIn("nvs_set_", cdriver)
+        self.assertNotIn("esp_ota_write(", cdriver)
+
     def test_disabled_loader_never_writes_firmware(self):
         source = (ROOT / "main/api.c").read_text()
         self.assertIn('"/api/firmware/flash", HTTP_POST, loader_disabled', source)

@@ -16,7 +16,7 @@
         <div class="mark" aria-hidden="true">B<span>/</span>M</div>
         <div><div class="product">BlazeMCU</div><div class="subtitle">ESP starter · Hardware laboratory</div></div>
       </div>
-      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.4.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
+      <div class="edition"><span class="edition-dot" aria-hidden="true"></span>0.5.0 PREVIEW <span class="edition-detail">/ hardware unverified</span></div>
     </div>
   </header>
   <main class="shell">
@@ -153,8 +153,24 @@
         <p class="fine-print">A response only means that a device acknowledged its address. Empty results do not prove that no device is connected; power, pull-ups, wiring and controller configuration matter.</p>
       </article>
       <article class="panel narrow companion">
-        <div class="panel-head"><h2>Display drivers & slideshow</h2><span class="state">Not implemented</span></div>
-        <p>SSD1306, SH1106, HD44780 I²C, ST7735, ST7789 and ILI9341 initialization, graphics and slideshows remain unavailable. SPI display discovery is manual by design.</p>
+        <div class="panel-head"><h2>OLED 128×64 pattern test</h2><span class="state">Explicit model · 3.3 V</span></div>
+        <p>Limited, opt-in display initialization and diagnostics for SSD1306 or SH1106 I²C OLED modules. The I²C scan above does <strong>not</strong> identify the controller. Confirm the actual module model and wiring before sending commands.</p>
+        <div class="field-row">
+          <div class="field"><label for="oledModel">Controller (from module datasheet)</label>
+            <select id="oledModel"><option value="ssd1306">SSD1306 · 128×64</option><option value="sh1106">SH1106 · 128×64</option></select></div>
+          <div class="field"><label for="oledAddress">I²C target address</label>
+            <select id="oledAddress"><option value="60">0x3C</option><option value="61">0x3D</option></select></div>
+        </div>
+        <label for="oledPattern">Diagnostic pattern</label>
+        <select id="oledPattern"><option value="checker">Checker blocks</option><option value="border">Border and center guide</option><option value="blank">Blank display RAM</option></select>
+        <label class="acknowledge"><input type="checkbox" id="oledConfirm"><span>I verified my device is the selected 128×64 OLED controller at this I²C address, with correct 3.3 V wiring. This operation will overwrite its display RAM.</span></label>
+        <div class="actions"><button id="oledRun" class="primary" type="button">Send OLED test pattern</button></div>
+        <p class="feedback" id="oledMessage" role="status">No test sent. Use the SDA/SCL pair and wiring acknowledgment selected above.</p>
+        <p class="fine-print">The image stays on the display until you send the Blank pattern, refresh it from another controller, or power-cycle. No automatic display clearing or slideshow is provided.</p>
+      </article>
+      <article class="panel narrow companion">
+        <div class="panel-head"><h2>Other display tools</h2><span class="state">Not implemented</span></div>
+        <p>HD44780 I²C backpack, SPI ST7735/ST7789/ILI9341, graphics slideshow, automatic identification and generic sensor control are still unavailable. They require separate drivers and bench testing.</p>
       </article>
     </section>
 
@@ -176,7 +192,7 @@
         <p>Never treat a matching filename, I²C address, or GPIO capability as a guarantee of hardware compatibility. Consult the board manufacturer's pinout before connecting loads.</p>
       </article>
     </section>
-    <footer>BlazeDevStudio · Offline device tools <span>Build 0.4.0-preview · No cloud services required</span></footer>
+    <footer>BlazeDevStudio · Offline device tools <span>Build 0.5.0-preview · No cloud services required</span></footer>
   </main>
 </body>
 </html>

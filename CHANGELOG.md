@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0-preview (OLED diagnostic driver, no release)
+
+- Added narrow SSD1306/SH1106 128×64 I²C initializers and checker/border/blank test patterns for ESP32 and ESP8266.
+- Shared host-testable command framing, 16-byte data chunks and SH1106 visible column offset; no copied third-party firmware.
+- Hard-restricts explicit user-selected address to 0x3C or 0x3D, requires admin token and confirmation, and refuses active GPIO test collisions.
+- Browser UI adds controller, address and test pattern selection with confirmation reset on changes; desktop/mobile mock-API regressions added.
+- ESP-IDF and ESP8266 Wire backends have bounded transaction deadlines. No hardware display pattern success has been verified.
+- Automatic controller discovery, HD44780, SPI TFT, slideshow, UART and FLASH/PREBOOT remain unfinished.
+
 ## 0.4.0-preview (I²C hardware lab preview — no release)
 
 - Both targets implement bounded I²C address-only discovery with configurable SDA/SCL.

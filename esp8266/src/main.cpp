@@ -8,6 +8,7 @@
 #include <string.h>
 #include "blaze_caps.h"
 #include "../../common/pwm_limits.h"
+#include "../../common/oled_pattern.h"
 #include "generated_web.h"
 
 // ESP8266-specific backend. The frontend is shared with the ESP32 target.
@@ -143,7 +144,7 @@ static void tickLab() {
 static void statusGet() {
   StaticJsonDocument<512> doc;
   doc["product"]="BlazeMCU ESP Starter";
-  doc["version"]="0.4.0-preview-esp8266";
+  doc["version"]="0.5.0-preview-esp8266";
   doc["board"]=BOARD;
   doc["cores"]=1;
   doc["heap_free"]=ESP.getFreeHeap();
@@ -345,6 +346,92 @@ static void i2cScanPost() {
   server.sendContent("]}");
   server.sendContent("");
 }
+static bool oledWriteBlock(uint8_t address, const uint8_t *data, size_t length) {
+  Wire.beginTransmission(address);
+  if (Wire.write(data,length) != length) {
+    Wire.endTransmission(true);
+    return false;
+  }
+  return Wire.endTransmission(true) == 0;
+}
+
+/* Opt-in OLED diagnostics: a responding address does NOT identify controller. */
+static void oledTestPost() {
+  if (!requireAdmin()) return;
+  String raw = server.arg("plain");
+  if (!raw.length() || raw.length() > 256) {
+    errorJson(413, "OLED request must be JSON up to 256 bytes"); return;
+  }
+  StaticJsonDocument<384> obj;
+  if (deserializeJson(obj,raw) || !obj["sda"].is<int>() ||
+      !obj["scl"].is<int>() || !obj["address"].is<int>() ||
+      !obj["controller"].is<const char*>() ||
+      !obj["pattern"].is<const char*>() ||
+      (obj.containsKey("ack") && !obj["ack"].is<bool>()) ||
+      !obj["confirm"].is<bool>()) {
+    errorJson(400, "Invalid OLED pins, controller, address or confirmation"); return;
+  }
+  const int sda = obj["sda"].as<int>();
+  const int scl = obj["scl"].as<int>();
+  const int addr = obj["address"].as<int>();
+  const char *model = obj["controller"];
+  const char *mode = obj["pattern"];
+  const int controller = strcmp(model, "ssd1306") == 0 ? BLAZE_OLED_SSD1306 :
+                         strcmp(model, "sh1106") == 0 ? BLAZE_OLED_SH1106 : -1;
+  const int pattern = strcmp(mode, "checker") == 0 ? BLAZE_OLED_CHECKER :
+                      strcmp(mode, "border") == 0 ? BLAZE_OLED_BORDER :
+                      strcmp(mode, "blank") == 0 ? BLAZE_OLED_BLANK : -1;
+  if (!blaze_oled_allowed(addr,controller,pattern)) {
+    errorJson(422,"Only explicitly selected SSD1306/SH1106 128x64 at 0x3C/0x3D supported"); return;
+  }
+  if (!obj["confirm"].as<bool>()) {
+    errorJson(409,"Confirm model and wiring before changing OLED display RAM"); return;
+  }
+  const bool acknowledged = obj["ack"] | false;
+  const Blaze8266Decision permission = blaze8266I2cPolicy(sda,scl,acknowledged);
+  if (permission == BLAZE8266_ACK_REQUIRED) {
+    errorJson(409,"Acknowledge sensitive SDA/SCL pin warnings"); return;
+  }
+  if (permission != BLAZE8266_ALLOW) {
+    errorJson(422,"Unsupported OLED SDA/SCL pin pairing"); return;
+  }
+  tickLab();
+  if (activePin >= 0) {
+    errorJson(409,"STOP active GPIO experiment before OLED test"); return;
+  }
+  Wire.begin(sda,scl);
+  Wire.setClock(100000);
+  Wire.setClockStretchLimit(5000);
+  Wire.beginTransmission((uint8_t)addr);
+  bool ok = Wire.endTransmission(true) == 0;
+  const uint32_t begun = millis();
+  size_t length = 0;
+  const uint8_t *commands = blaze_oled_init_commands(controller,&length);
+  if (ok) ok = oledWriteBlock((uint8_t)addr,commands,length);
+  for (unsigned page = 0; page < BLAZE_OLED_PAGES && ok; ++page) {
+    uint8_t cmds[4];
+    blaze_oled_page_commands(controller,page,cmds);
+    ok = oledWriteBlock((uint8_t)addr,cmds,sizeof(cmds));
+    for (unsigned column=0; column < BLAZE_OLED_WIDTH && ok;
+         column += BLAZE_OLED_CHUNK) {
+      if (static_cast<uint32_t>(millis()-begun) > 2000) { ok = false; break; }
+      uint8_t data[BLAZE_OLED_CHUNK+1];
+      blaze_oled_data_chunk(pattern,page,column,data);
+      ok = oledWriteBlock((uint8_t)addr,data,sizeof(data));
+      yield();
+    }
+  }
+  // Pinned core does not have Wire.end(). Return the lines to GPIO input.
+  pinMode(sda,INPUT);
+  pinMode(scl,INPUT);
+  if (!ok) {
+    errorJson(503,"OLED write failed or timed out; check model, 3.3V wiring and pull-ups"); return;
+  }
+  StaticJsonDocument<192> result;
+  result["status"]="completed";
+  result["note"]="Test pattern sent; unverified on actual display. Use Blank to clear display RAM.";
+  sendJson(200,result);
+}
 static void loaderDisabled() {
   if (!requireAdmin()) return;
   errorJson(501,"FLASH and PREBOOT unavailable: image validation and recovery not yet proven on ESP8266");
@@ -381,6 +468,7 @@ static void beginServer() {
   server.on("/api/gpio",HTTP_POST,gpioPost);
   server.on("/api/gpio/stop",HTTP_POST,gpioStop);
   server.on("/api/i2c/scan",HTTP_POST,i2cScanPost);
+  server.on("/api/oled/test",HTTP_POST,oledTestPost);
   server.on("/api/firmware/flash",HTTP_POST,loaderDisabled);
   server.on("/api/firmware/preboot",HTTP_POST,loaderDisabled);
   server.onNotFound([](){ errorJson(404,"Unknown route"); });

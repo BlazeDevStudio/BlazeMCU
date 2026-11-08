@@ -2,6 +2,8 @@
 #include "board_caps.h"
 #include "lab.h"
 #include "i2c_scan.h"
+#include "oled_diag.h"
+#include "../common/oled_pattern.h"
 #include "../common/pwm_limits.h"
 #include "security.h"
 #include "cJSON.h"
@@ -88,7 +90,7 @@ static esp_err_t status_get(httpd_req_t *req) {
   esp_flash_get_size(NULL, &flash);
   cJSON *obj = cJSON_CreateObject();
   cJSON_AddStringToObject(obj, "product", "BlazeMCU ESP Starter");
-  cJSON_AddStringToObject(obj, "version", "0.4.0-preview");
+  cJSON_AddStringToObject(obj, "version", "0.5.0-preview");
   cJSON_AddStringToObject(obj, "board", blaze_board_id());
   cJSON_AddNumberToObject(obj, "cores", info.cores);
   cJSON_AddNumberToObject(obj, "heap_free", esp_get_free_heap_size());
@@ -254,6 +256,64 @@ static esp_err_t i2c_scan_post(httpd_req_t *req) {
   return json_send(req, out, NULL);
 }
 
+/* A model/address selection is NOT a controller identification protocol.
+ * Require an explicit, model-specific opt-in before issuing display commands.
+ */
+static esp_err_t oled_post(httpd_req_t *req) {
+  if (!authorized(req)) return require_token(req);
+  cJSON *obj = NULL;
+  if (receive_small_json(req, &obj) != ESP_OK)
+    return error_response(req, "400 Bad Request", "Expected small JSON object");
+  cJSON *sda = cJSON_GetObjectItemCaseSensitive(obj, "sda");
+  cJSON *scl = cJSON_GetObjectItemCaseSensitive(obj, "scl");
+  cJSON *addr = cJSON_GetObjectItemCaseSensitive(obj, "address");
+  cJSON *model = cJSON_GetObjectItemCaseSensitive(obj, "controller");
+  cJSON *pattern = cJSON_GetObjectItemCaseSensitive(obj, "pattern");
+  cJSON *ack = cJSON_GetObjectItemCaseSensitive(obj, "ack");
+  cJSON *confirm = cJSON_GetObjectItemCaseSensitive(obj, "confirm");
+  if (!cJSON_IsNumber(sda) || !cJSON_IsNumber(scl) || !cJSON_IsNumber(addr) ||
+      sda->valuedouble != (double)sda->valueint ||
+      scl->valuedouble != (double)scl->valueint ||
+      addr->valuedouble != (double)addr->valueint ||
+      !cJSON_IsString(model) || !cJSON_IsString(pattern) ||
+      (ack && !cJSON_IsBool(ack)) || !cJSON_IsBool(confirm)) {
+    cJSON_Delete(obj);
+    return error_response(req, "400 Bad Request", "Invalid OLED pin, controller, address or confirmation");
+  }
+  const int sda_pin = sda->valueint, scl_pin = scl->valueint;
+  const int address = addr->valueint;
+  const bool acknowledged = cJSON_IsTrue(ack);
+  const bool confirmed = cJSON_IsTrue(confirm);
+  const int controller = strcmp(model->valuestring,"ssd1306") == 0 ? BLAZE_OLED_SSD1306 :
+                         strcmp(model->valuestring,"sh1106") == 0 ? BLAZE_OLED_SH1106 : -1;
+  const int paint = strcmp(pattern->valuestring,"checker") == 0 ? BLAZE_OLED_CHECKER :
+                    strcmp(pattern->valuestring,"border") == 0 ? BLAZE_OLED_BORDER :
+                    strcmp(pattern->valuestring,"blank") == 0 ? BLAZE_OLED_BLANK : -1;
+  cJSON_Delete(obj);
+  if (!blaze_oled_allowed(address,controller,paint))
+    return error_response(req, "422 Unprocessable Entity",
+                          "Only explicitly selected SSD1306/SH1106 128x64 at 0x3C/0x3D supported");
+  if (!confirmed)
+    return error_response(req, "409 Conflict", "Confirm model and wiring before changing OLED display RAM");
+  blaze_policy_t permission = blaze_i2c_decide(sda_pin,scl_pin,acknowledged);
+  if (permission == BLAZE_ACK_REQUIRED)
+    return error_response(req, "409 Conflict", "Acknowledge sensitive SDA/SCL pin warnings");
+  if (permission != BLAZE_ALLOW)
+    return error_response(req, "422 Unprocessable Entity", "Unsupported OLED SDA/SCL pin pairing");
+  esp_err_t result = blaze_oled_draw(sda_pin,scl_pin,address,controller,paint,acknowledged);
+  if (result == ESP_ERR_INVALID_STATE)
+    return error_response(req, "409 Conflict", "STOP active GPIO experiment before OLED test");
+  if (result != ESP_OK)
+    return error_response(req, "503 Service Unavailable",
+                          "OLED write failed or timed out; check controller, 3.3V wiring and pull-ups");
+  cJSON *out = cJSON_CreateObject();
+  if (!out) return ESP_ERR_NO_MEM;
+  cJSON_AddStringToObject(out, "status", "completed");
+  cJSON_AddStringToObject(out, "note",
+                          "Test pattern sent; unverified on actual display. Use Blank to clear display RAM.");
+  return json_send(req, out, NULL);
+}
+
 static esp_err_t gpio_stop(httpd_req_t *req) {
   if (!authorized(req)) return require_token(req);
   if (blaze_lab_stop() != ESP_OK) return error_response(req, "503 Service Unavailable", "Failed to stop test");
@@ -272,7 +332,7 @@ static esp_err_t register_route(const char *uri, httpd_method_t method, esp_err_
 }
 esp_err_t blaze_api_start(void) {
   httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
-  cfg.max_uri_handlers = 13;
+  cfg.max_uri_handlers = 14;
   cfg.stack_size = 6144;
   esp_err_t e = httpd_start(&server, &cfg);
   if (e != ESP_OK) return e;
@@ -286,6 +346,7 @@ esp_err_t blaze_api_start(void) {
       (e = register_route("/api/gpio", HTTP_POST, gpio_post)) != ESP_OK ||
       (e = register_route("/api/gpio/stop", HTTP_POST, gpio_stop)) != ESP_OK ||
       (e = register_route("/api/i2c/scan", HTTP_POST, i2c_scan_post)) != ESP_OK ||
+      (e = register_route("/api/oled/test", HTTP_POST, oled_post)) != ESP_OK ||
       (e = register_route("/api/firmware/flash", HTTP_POST, loader_disabled)) != ESP_OK ||
       (e = register_route("/api/firmware/preboot", HTTP_POST, loader_disabled)) != ESP_OK) {
     httpd_stop(server);

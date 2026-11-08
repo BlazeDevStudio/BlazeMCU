@@ -134,12 +134,44 @@
     var sda = pins.find(function (p) { return p.number === Number($('i2cSda').value); });
     var scl = pins.find(function (p) { return p.number === Number($('i2cScl').value); });
     $('i2cAck').checked = false;
+    $('oledConfirm').checked = false;
     if (!sda || !scl) return;
     text('i2cWarnings', 'SDA: ' + sda.warning + ' SCL: ' + scl.warning +
       (sda.number === scl.number ? ' Both pins must be different.' : '') +
       (!sda.input || !sda.output || !scl.input || !scl.output ?
         ' One or both pins cannot run I²C on this board.' : ''));
   }
+  async function runOled() {
+    if (!token) {
+      feedback('oledMessage','Verify admin access on Overview before operating the OLED.','error');
+      return;
+    }
+    if (!$('oledConfirm').checked) {
+      feedback('oledMessage','Confirm the actual 128×64 controller model, 3.3 V wiring and address first.','error');
+      return;
+    }
+    $('oledRun').disabled = true;
+    feedback('oledMessage','Sending a bounded display write…');
+    try {
+      var result = await request('/api/oled/test','POST',{
+        sda: Number($('i2cSda').value),
+        scl: Number($('i2cScl').value),
+        address: Number($('oledAddress').value),
+        controller: $('oledModel').value,
+        pattern: $('oledPattern').value,
+        ack: $('i2cAck').checked,
+        confirm: $('oledConfirm').checked
+      });
+      feedback('oledMessage',result.note ||
+        'Pattern sent. This is not physical display verification.','success');
+      $('oledConfirm').checked = false;
+    } catch (error) {
+      feedback('oledMessage','OLED test unsuccessful: ' + error.message,'error');
+    } finally {
+      $('oledRun').disabled = false;
+    }
+  }
+
   async function scanI2c() {
     if (!token) {
       feedback('i2cMessage', 'Verify admin access on Overview before scanning.', 'error');
@@ -339,6 +371,10 @@
   $('i2cSda').addEventListener('change', inspectI2cPins);
   $('i2cScl').addEventListener('change', inspectI2cPins);
   $('i2cScan').addEventListener('click', scanI2c);
+  $('oledModel').addEventListener('change', function () { $('oledConfirm').checked = false; });
+  $('oledAddress').addEventListener('change', function () { $('oledConfirm').checked = false; });
+  $('oledPattern').addEventListener('change', function () { $('oledConfirm').checked = false; });
+  $('oledRun').addEventListener('click', runOled);
   updateControls();
   showTab('dashboard');
   (async function init() {

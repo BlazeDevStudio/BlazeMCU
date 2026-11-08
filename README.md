@@ -1,6 +1,6 @@
 # BlazeMCU — ESP Starter & Hardware Laboratory
 
-**0.4.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
+**0.5.0 PREVIEW / UNVERIFIED — NOT READY FOR CUSTOMER RESALE OR PHYSICAL DEPLOYMENT**
 
 A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board starter firmware, intentionally separate from Blaze MCU Studio, BlazePwifi, Phoenix, and the CoinOperatedEcosystem.
 
@@ -15,8 +15,9 @@ A standalone dual-target ESP32-WROOM-32 / ESP8266 ESP-12E/F reference-board star
 - Sensitive pin acknowledgment, input-only rejection of output driving, flash-pin hard deny.
 - Session-only GPIO; 20-second timeout and explicit STOP release; no persisted GPIO choices.
 - Admin-protected **I²C 7-bit address discovery** (0x08–0x77), with selectable SDA/SCL, safe board pin policy, fixed bounded probing, and no persistent bus settings. A responding address does not identify a display controller.
+- Opt-in **SSD1306/SH1106 128×64 OLED test patterns** with manually selected controller at 0x3C/0x3D, bounded writes and explicit wiring confirmation. Not an auto-detector and not yet physically validated.
 
-**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, I²C register tools, SPI diagnostics, display drivers/slideshow, UART monitor, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
+**Not implemented on either target:** firmware upload, FLASH, PREBOOT, input-to-output mapping, debounce, ADC sampling, general I²C register tools, SPI diagnostics, display slideshow/other controller drivers, UART monitor, and broader board-family compatibility certification. Disabled functions are visibly labeled. This source has no proven hardware results yet.
 
 ## Build
 
@@ -67,6 +68,16 @@ Use external pull-ups to **3.3 V**, do not use the board with unknown or 5 V log
 and release active GPIO experiments before scanning. Every documented pin can be
 selected, but unsupported flash/input-only/GPIO16 (ESP8266) operations are refused.
 No bus settings or addresses are persisted. See [I²C instructions](docs/I2C.md).
+
+## OLED pattern diagnostics (preview, not hardware verified)
+
+The Display tab includes model-specific SSD1306/SH1106 **128×64 only** init and
+checker/border/blank patterns for an explicitly selected address 0x3C or 0x3D.
+No model is inferred from the scan. This overwrites display RAM and is not
+automatically cleared; select Blank to clear. Verify the actual OLED board,
+power supply, 3.3 V SDA/SCL pull-ups and controller datasheet before use.
+Not compatible with 128×32, HD44780, SPI TFTs or other unverified controllers.
+See [OLED diagnostics](docs/OLED.md).
 
 ## Quality gates
 

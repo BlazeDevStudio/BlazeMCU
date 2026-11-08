@@ -43,3 +43,7 @@ The dashboard must confirm the per-device admin token with /api/auth/check befor
 ## I²C address discovery
 
 Address-only bus scanning is available on both ESP32 and ESP8266, but **not hardware verified**. Avoid 5 V pull-ups. The driver checks 0x08–0x77 at bounded timeout and releases pins after the scan, refusing to interrupt an active GPIO lease. It never identifies, initializes, or drives a display controller. See docs/I2C.md.
+
+## Limited I²C OLED output
+
+The 0.5 preview offers opt-in SSD1306/SH1106 128×64 checker, border and blank patterns only. No display model is auto-detected. It rewrites target display RAM and may persist visually until blank/power off; laboratory settings are never stored. The driver refuses scans while a GPIO test is active. Physical output and recovery remain unverified.

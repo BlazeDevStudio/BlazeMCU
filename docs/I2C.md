@@ -43,3 +43,7 @@ scan while important equipment depends on those pins.
 Display diagnostics, RGB patterns, OLED initialization, SPI probing, and any
 automatic controller identification remain unavailable pending dedicated
 drivers and electrical tests.
+
+## OLED diagnostics are a separate explicit operation (0.5 preview)
+
+The I²C scanner remains **address-only**; a response at 0x3C/0x3D is NOT proof that a controller is SSD1306 or SH1106. The operator must separately choose the exact 128×64 controller and acknowledge wiring before any OLED command is issued. See docs/OLED.md. No generic sensor register writes have been added.
